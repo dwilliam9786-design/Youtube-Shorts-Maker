@@ -1,0 +1,139 @@
+{
+  "theme": "Dark",
+  "archetype": "Swiss & High-Contrast mixed with Performance Pro (Archetypes 4 & 2)",
+  "design_vision": "Cinematic, tactical, pro-creator tool. Inspired by CapCut, Linear, and Notion. Uses pure function-first UI for the editor, contrasted with a cinematic, highly-polished marketing presence. NO generic AI slop. NO purple/violet gradients. Deep obsidian space, accented strictly by Cyber Yellow and pure white.",
+  "colors": {
+    "background_base": "#070707",
+    "background_panel": "#121212",
+    "background_track": "#1C1C1E",
+    "background_glass": "rgba(18, 18, 18, 0.7)",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#8E8E93",
+    "text_muted": "#52525B",
+    "accent_primary": "#FFD60A",
+    "accent_secondary": "#FF3B30",
+    "accent_hover": "#F0C808",
+    "border_subtle": "rgba(255, 255, 255, 0.08)",
+    "border_active": "rgba(255, 214, 10, 0.5)",
+    "viral_glow": "rgba(255, 214, 10, 0.3)"
+  },
+  "typography": {
+    "font_families": {
+      "marketing_heading": "'Cabinet Grotesk', sans-serif",
+      "ui_body": "'Satoshi', sans-serif",
+      "mono_data": "'JetBrains Mono', monospace"
+    },
+    "hierarchy_rules": {
+      "h1_marketing": "text-5xl sm:text-6xl font-black tracking-tighter leading-none",
+      "h2_section": "text-2xl sm:text-3xl font-bold tracking-tight",
+      "ui_heading": "text-xs font-bold uppercase tracking-[0.2em] text-[#8E8E93]",
+      "body": "text-sm leading-relaxed",
+      "timecode": "font-mono text-xs text-[#FFD60A]"
+    }
+  },
+  "layout_and_spacing": {
+    "marketing": "Asymmetric bento grids, massive padding (p-16 to p-32).",
+    "dashboard": "Standard grid layout (grid-cols-1 md:grid-cols-4), gap-6.",
+    "editor": "Strict Control Room layout. 100vh locked. Flexbox / Grid combo with zero wasted space. Sub-panels use p-2 or p-4."
+  },
+  "surface_strategies": {
+    "editor_panels": "Flat solid #121212 with 1px border_subtle. No shadows. Sharp corners or very subtle rounded-sm.",
+    "timeline_tracks": "Rounded-sm, subtle inner shadow, background_track.",
+    "modals_and_glass": "Glassmorphism: bg-[#121212]/70, backdrop-blur-xl, border-[#ffffff]/10.",
+    "viral_mode_btn": "Retro-Futurism: bg-transparent, border-[#FFD60A], text-[#FFD60A], drop-shadow glow on hover."
+  },
+  "page_level_guidance": {
+    "landing": {
+      "layout": "Hero centered with heavy text, overlaying abstract dark bg. Bento grid below for features.",
+      "key_elements": "Hero BG, massive H1, 'Start Creating' CTA in Cyber Yellow."
+    },
+    "auth": {
+      "layout": "Centered Glassmorphic card on deep charcoal noise background.",
+      "key_elements": "Social logins, minimal form, no distracting graphics."
+    },
+    "projects_dashboard": {
+      "layout": "Top header with user avatar, 'New Project' dominant CTA. Grid of project cards below.",
+      "key_elements": "Thumbnail images, project title, last edited relative time."
+    },
+    "ai_studio_wizard": {
+      "layout": "2-column split. Left: Script input (textarea). Right: AI generation status & real-time visual preview.",
+      "key_elements": "Progress indicators, 'Generate Voiceover' & 'Split Scenes' toggles."
+    },
+    "editor": {
+      "layout": "Grid template areas. Top Nav (H: 48px). Left Sidebar (W: 280px, Asset Library). Center Top (Preview Canvas). Right Sidebar (W: 280px, Inspector/Properties). Bottom (H: 40%, Timeline).",
+      "key_elements": "Playhead (yellow absolute line), multi-track timeline, draggable clips, inspector tabs (Video, Audio, Captions, Effects)."
+    },
+    "render_queue_export": {
+      "layout": "Floating dialog or full-screen overlay.",
+      "key_elements": "Large JetBrains Mono percentage, sleek yellow progress bar, terminal-like render logs."
+    }
+  },
+  "motion_and_interactions": {
+    "general": "Snappy, tool-like. Micro-interactions on hover (bg-zinc-800).",
+    "timeline": "Smooth horizontal scrolling. Draggable clips need 'grabbing' cursor.",
+    "playhead": "Transition strictly linear for playback.",
+    "modals": "Fade in with slight scale up (Framer Motion)."
+  },
+  "components": {
+    "buttons": "Shadcn based. Primary: bg-[#FFD60A] text-black hover:bg-[#F0C808]. Secondary: bg-transparent border border-white/10 text-white hover:bg-white/5.",
+    "inputs": "bg-[#070707] border-white/10 focus:border-[#FFD60A] focus:ring-1 focus:ring-[#FFD60A]/50 text-white rounded-md",
+    "tabs": "Cardless tabs. Underline active indicator in #FFD60A, text turns white.",
+    "slider": "Shadcn slider, track is white/20, active is #FFD60A, thumb is white."
+  },
+  "media_assets": [
+    {
+      "category": "hero_background",
+      "url": "https://static.prod-images.emergentagent.com/jobs/920b20a9-8be0-4858-96c8-c183e9068c23/images/9116f7965d2816ef580412c2fe14d7656d690f37a888c227c1d76f95d3180d10.png",
+      "description": "Abstract cinematic dark mode background"
+    },
+    {
+      "category": "brand_logo",
+      "url": "https://static.prod-images.emergentagent.com/jobs/920b20a9-8be0-4858-96c8-c183e9068c23/images/457da29a3d3e6a8af544396c08bf031c537ccdd81c0ce9130756f8c58c2af231.png",
+      "description": "Sleek dark mode logo 'V'"
+    },
+    {
+      "category": "stock_video_thumbnail_1",
+      "url": "https://images.unsplash.com/photo-1603651397449-eaa6fcfc3e28?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwxfHxjaW5lbWF0aWMlMjB2aWRlbyUyMHRodW1ibmFpbHxlbnwwfHx8fDE3NzkyNjUzNzZ8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Black and silver DSLR camera"
+    },
+    {
+      "category": "stock_video_thumbnail_2",
+      "url": "https://images.pexels.com/photos/2925322/pexels-photo-2925322.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Man adjusting a professional video camera"
+    },
+    {
+      "category": "stock_video_preview_1",
+      "url": "https://images.pexels.com/photos/33916846/pexels-photo-33916846.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Camera and monitor setup"
+    },
+    {
+      "category": "stock_video_preview_2",
+      "url": "https://images.pexels.com/photos/29202983/pexels-photo-29202983.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Hungarian countryside landscape"
+    },
+    {
+      "category": "user_avatar_1",
+      "url": "https://images.unsplash.com/photo-1586297135537-94bc9ba060aa?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHwzfHx1c2VyJTIwYXZhdGFyJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzc5MjY1Mzc2fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Woman in floral shirt"
+    },
+    {
+      "category": "user_avatar_2",
+      "url": "https://images.unsplash.com/photo-1704726135027-9c6f034cfa41?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHwxfHx1c2VyJTIwYXZhdGFyJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzc5MjY1Mzc2fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Man sitting at a table"
+    }
+  ],
+  "accessibility_and_testing": {
+    "contrast": "Ensure text meets APCA standards. Use Text Shadow on canvas overlays.",
+    "testing_attributes": "All interactive elements MUST include a data-testid attribute (e.g., data-testid='viral-mode-btn')."
+  },
+  "instructions_to_main_agent": [
+    "Add Fontshare CDN in index.css: @import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@800,500,700,900&f[]=satoshi@400,500,700,900&display=swap');",
+    "Add Google Fonts CDN in index.css: @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');",
+    "Configure tailwind.config.js to extend these font families ('Cabinet Grotesk', 'Satoshi', 'JetBrains Mono').",
+    "Do NOT use HTML <select> or <input type='date'>. Use Shadcn components heavily customized to match the dark theme.",
+    "Prioritize performance. Timeline needs to be built with raw divs + Tailwind for rendering speed.",
+    "Use Phosphor Icons (yarn add @phosphor-icons/react) for dense UI tools like the editor.",
+    "Make sure the timeline playhead is absolute positioned with z-index above tracks.",
+    "Build the 'Viral Mode' button using Retro-Futurism styling: neon yellow borders, glowing drop-shadow."
+  ]
+}

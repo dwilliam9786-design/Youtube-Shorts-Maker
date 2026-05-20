@@ -1,0 +1,43 @@
+{
+  "summary": "Full backend regression run for Voltcut. All 11 pytest tests passed in ~37s including the full AI pipeline (GPT scene split + OpenAI TTS + Whisper-1 word alignment + Pixabay/mock image), FFmpeg render lifecycle, and MP4 file serving.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "DELETE /api/projects/{id}", "issue": "Always returns HTTP 200 even when nothing matched (deleted: 0). Consider returning 404 when project not found for stricter semantics."},
+      {"endpoint": "PATCH /api/projects/{id}", "issue": "Accepts arbitrary dict payload (no Pydantic model). Could allow clients to overwrite protected fields such as id/created_at. Add a typed UpdateProject model with allowed fields."},
+      {"endpoint": "GET /api/library/search", "issue": "Uses `type` as a query param which shadows Python builtin and is a reserved word in some clients. Consider renaming to `media_type` (param alias acceptable)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional: tighten PATCH /api/projects/{id} payload via Pydantic model (currently accepts dict).",
+    "Optional: return 404 from DELETE /api/projects/{id} when nothing was deleted.",
+    "Optional: replace `type` query param with `media_type` in /api/library/search."
+  ],
+  "critical_code_review_comments": [
+    "server.py mixes route handlers with background task and serialization helpers — fine at this size but if it grows past 700 lines split into routers (projects/render/library/meta).",
+    "render_service.py uses subprocess.run (blocking) inside an async path called from BackgroundTasks. It works because BackgroundTasks runs the coroutine in a worker but each scene blocks the event loop for several seconds. Consider asyncio.create_subprocess_exec for non-blocking ffmpeg calls.",
+    "render_project caption drawtext chain escapes commas but `_ffmpeg_escape` also escapes commas globally — that yields `\\,` inside the regex content which is acceptable but double-escapes when wrapped by the chained filtergraph; smoke tests pass, but very long caption lists with edge characters may break — add unit tests around _build_caption_filter.",
+    "ai_service.transcribe_words has a graceful fallback when Whisper returns no word timestamps — good. duration uses `max(2.0, len(text.split())*0.4)` only when align duration is 0 — already covered.",
+    "pixabay_service mock fallback is intentional (no PIXABAY_API_KEY). Documented and verified.",
+    "All endpoints exclude `_id` correctly via projection ({\"_id\": 0}) and explicit doc.pop in serializers — good MongoDB hygiene."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (new pytest suite)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "not tested (skipped per request)"},
+  "test_credentials": "n/a (no auth in this app)",
+  "seed_data_creation": "Test creates and deletes TEST_blank_project and TEST_generated projects within the run (cleanup at end). One render MP4 left under /app/storage/renders/ as ffmpeg output; cleanup not implemented.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend is fully green. The pytest suite at /app/backend/tests/backend_test.py is ordered (state dict carries IDs across tests) — run as a single module. Generation test uses a 1-sentence script and completes in ~25s; render polling timeout is 100s. If retesting, just re-run `pytest /app/backend/tests/backend_test.py -v`. Pixabay key is intentionally empty so library returns curated Unsplash mock — do not flag as bug."
+}

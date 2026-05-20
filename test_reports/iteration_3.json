@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 2.1 backend hardening verified end-to-end. Created /app/backend/tests/test_v21_hardening.py (14 tests) and re-ran iter1+iter2 regression suites (excluding slow webm/mov per request). Combined: 35/35 passing. Confirmed: (1) /api/uploads accepts .png/.jpg/.mp4/.mp3 with correct response shape (url, size, media_type, kind), rejects .exe and .txt with 415; (2) /api/storage rejects '..' and '\\' (URL-encoded) with 400; (3) /api/storage rejects unknown kind (e.g. /api/storage/foo/bar.jpg) with 404; (4) /api/storage serves valid PNG with correct bytes; (5) POST /api/renders mp4@30 completes successfully (regression intact); (6) Non-blocking event loop verified — during an active ffmpeg render, /api/ and /api/renders/{job_id} were probed every ~0.5s, returning n=47 samples each with median ~0.10s and max 0.293s, well under the 5s SLA. asyncio.create_subprocess_exec works as intended.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/uploads", "issue": "Server still trusts client-provided filename for extension detection; no MIME/Content-Type cross-check. A user can rename evil.exe to evil.png and bypass the allow-list. Low risk given files are only served as static content, but consider sniffing magic bytes for stricter validation."},
+      {"endpoint": "PATCH /api/projects/{id}", "issue": "(carry-over) Still accepts arbitrary dict — clients can overwrite id/created_at. Add a typed UpdateProject Pydantic model."},
+      {"endpoint": "DELETE /api/projects/{id}", "issue": "(carry-over) Returns 200 even when nothing matched. Consider 404."},
+      {"endpoint": "POST /api/renders", "issue": "(carry-over) fps is clamped silently inside render_service. Validate at Pydantic layer or reflect coerced value in the response."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_v21_hardening.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_v2_features.py",
+    "/app/test_reports/pytest/iter21_results.xml",
+    "/app/test_reports/pytest/iter21_regression.xml"
+  ],
+  "action_items": [
+    "No blocker. Optional polish: add a typed UpdateProject Pydantic model, return 404 from DELETE when nothing matched, reflect clamped fps in /api/renders response, and consider magic-byte sniffing on /api/uploads to defeat extension spoofing."
+  ],
+  "critical_code_review_comments": [
+    "render_service._run: clean async impl with create_subprocess_exec; combined stdout+stderr is fine for error logging. Good.",
+    "server.py /api/storage: defense-in-depth is correct — explicit reject of '..','/','\\\\' AND resolve().relative_to() check. Solid.",
+    "server.py /api/uploads: streaming write with 1MB chunks + size cap is correct; tempfile is removed on overflow. Good.",
+    "render_service._effects_filter still has the rgb_split filtergraph-vs-chain bug from iter 2 (uses ';' and [labels] inside a comma-joined chain). Will produce malformed filtergraph if a user combines rgb_split with shake/vignette. Not regressed in this iter — pre-existing.",
+    "server.py at ~376 lines — still under the 700-line split threshold but trending up; consider splitting routers when adding next major feature."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_v21_hardening.py (new — 14 tests covering uploads validation, storage guard, and non-blocking event-loop proof)"
+  ],
+  "success_rate": {"backend": "100% (35/35: 14 new hardening + 11 iter1 regression + 10 iter2 regression — webm/mov deselected per request)", "frontend": "skipped per request"},
+  "test_credentials": "n/a (no auth)",
+  "seed_data_creation": "Creates TEST_iter21.png/.jpg/.mp4/.mp3 under /app/storage/uploads/ and a TEST_iter21_render project (deleted at end of run). No leftover projects.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Three pytest files now under /app/backend/tests/: backend_test.py (iter1 regression, 11 tests, ~50s), test_v2_features.py (v2 regression, 12 tests — webm/mov add ~3min if included), test_v21_hardening.py (iter2.1 hardening, 14 tests, ~50s). The non-blocking probe in test_render_mp4_30_nonblocking is the canonical assertion that ffmpeg no longer blocks the event loop — keep it. To run a fast smoke: `pytest backend/tests/test_v21_hardening.py -v` (50s).",
+  "rca of the issue": "No bugs found in this iteration. Previous iter 2 had subprocess.run blocking the event loop, causing 502/504 during long renders. Fix applied in render_service._run (asyncio.create_subprocess_exec) and storage/upload hardening in server.py are all verified working. The non-blocking proof: 47 concurrent probes during active render showed max 0.293s latency (vs 5s threshold). Path-traversal guard correctly rejects '..', '/', '\\\\' with 400 and unknown kinds with 404. Extension allow-list rejects .exe/.txt with 415."
+}

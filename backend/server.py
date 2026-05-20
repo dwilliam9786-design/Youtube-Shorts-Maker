@@ -43,12 +43,27 @@ async def root():
     return {"service": "voltcut", "status": "ok", "time": _now()}
 
 
+MAX_UPLOAD_BYTES = 200 * 1024 * 1024  # 200 MB
+ALLOWED_UPLOAD_EXT = {
+    ".jpg", ".jpeg", ".png", ".webp", ".gif",
+    ".mp4", ".mov", ".webm", ".m4v",
+    ".mp3", ".wav", ".m4a", ".ogg",
+}
+
+
 # ----- Storage / file serving -----
 @api.get("/storage/{kind}/{name}")
 async def storage_file(kind: str, name: str):
     if kind not in {"voiceover", "renders", "uploads"}:
         raise HTTPException(404)
+    # Path traversal guard
+    if "/" in name or ".." in name or "\\" in name:
+        raise HTTPException(400, "Invalid filename")
     path = STORAGE_DIR / kind / name
+    try:
+        path.resolve().relative_to((STORAGE_DIR / kind).resolve())
+    except (ValueError, RuntimeError):
+        raise HTTPException(400, "Invalid path")
     if not path.exists():
         raise HTTPException(404, "Not found")
     return FileResponse(str(path))
@@ -318,18 +333,31 @@ async def meta():
 async def upload_file(file: UploadFile = File(...), kind: str = Form("image")):
     """Save user uploads (image/video/audio) and return /api/storage URL."""
     ext = Path(file.filename or "").suffix.lower() or ".bin"
+    if ext not in ALLOWED_UPLOAD_EXT:
+        raise HTTPException(415, f"Unsupported file extension {ext}")
     name = f"{_uid()}{ext}"
     dest = STORAGE_DIR / "uploads" / name
     dest.parent.mkdir(parents=True, exist_ok=True)
-    contents = await file.read()
-    dest.write_bytes(contents)
+    # Stream-write with size cap to avoid loading huge files into RAM
+    total = 0
+    with dest.open("wb") as f:
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_UPLOAD_BYTES:
+                f.close()
+                dest.unlink(missing_ok=True)
+                raise HTTPException(413, f"File too large (>{MAX_UPLOAD_BYTES // (1024 * 1024)}MB)")
+            f.write(chunk)
     media_type = "video" if ext in {".mp4", ".mov", ".webm", ".m4v"} else (
         "audio" if ext in {".mp3", ".wav", ".m4a", ".ogg"} else "image"
     )
     return {
         "url": f"/api/storage/uploads/{name}",
         "filename": file.filename,
-        "size": len(contents),
+        "size": total,
         "media_type": media_type,
         "kind": kind,
     }

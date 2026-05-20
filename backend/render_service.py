@@ -1,8 +1,8 @@
 """FFmpeg render engine: project JSON -> MP4/WebM/MOV with karaoke captions + effects."""
 from __future__ import annotations
 import os
+import asyncio
 import shutil
-import subprocess
 import uuid
 import re
 import httpx
@@ -57,9 +57,15 @@ async def _download(url: str, dest: Path) -> Path:
     return dest
 
 
-def _run(cmd: List[str]) -> Tuple[int, str]:
-    p = subprocess.run(cmd, capture_output=True, text=True)
-    return p.returncode, (p.stderr or "") + (p.stdout or "")
+async def _run(cmd: List[str]) -> Tuple[int, str]:
+    """Run a command asynchronously (non-blocking for the event loop)."""
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+    return proc.returncode, (stderr.decode("utf-8", errors="ignore") + stdout.decode("utf-8", errors="ignore"))
 
 
 async def render_project(
@@ -117,12 +123,12 @@ async def render_project(
                 try:
                     await _download(img_url, img_path)
                 except Exception:
-                    _make_placeholder(img_path, W, H, f"Scene {i + 1}")
+                    await _make_placeholder(img_path, W, H, f"Scene {i + 1}")
             elif img_url and (STORAGE_DIR / img_url.lstrip("/").replace("api/storage/", "")).exists():
                 src = STORAGE_DIR / img_url.lstrip("/").replace("api/storage/", "")
                 shutil.copy(src, img_path)
             else:
-                _make_placeholder(img_path, W, H, f"Scene {i + 1}")
+                await _make_placeholder(img_path, W, H, f"Scene {i + 1}")
             media_path = img_path
 
         # Build filter chain: scale/crop -> animation -> effects -> captions (ASS subtitles)
@@ -175,7 +181,7 @@ async def render_project(
             cmd += ["-an"]
         cmd += [str(out_seg)]
 
-        code, log = _run(cmd)
+        code, log = await _run(cmd)
         if code != 0:
             raise RuntimeError(f"FFmpeg failed at scene {i}: {log[-1500:]}")
         scene_clips.append(out_seg)
@@ -185,7 +191,7 @@ async def render_project(
     list_file = work / "concat.txt"
     list_file.write_text("\n".join(f"file '{p}'" for p in scene_clips))
     concat_mp4 = work / "concat.mp4"
-    code, log = _run([
+    code, log = await _run([
         "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(list_file),
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
         "-c:a", "aac", "-b:a", "192k", "-r", str(fps),
@@ -211,7 +217,7 @@ async def render_project(
             music_path = None
         if music_path and music_path.exists():
             mixed = work / "mixed.mp4"
-            code, log = _run([
+            code, log = await _run([
                 "ffmpeg", "-y", "-i", str(concat_mp4), "-stream_loop", "-1", "-i", str(music_path),
                 "-filter_complex", "[1:a]volume=0.18[m];[0:a][m]amix=inputs=2:duration=first:dropout_transition=0[a]",
                 "-map", "0:v", "-map", "[a]",
@@ -225,10 +231,9 @@ async def render_project(
     final_name = f"{job_id}.{ext}"
     final_path = RENDER_DIR / final_name
     if out_format == "gif":
-        # special: produce optimized gif
         palette = work / "palette.png"
-        _run(["ffmpeg", "-y", "-i", str(concat_mp4), "-vf", f"fps={min(24, fps)},scale={W//2}:-1:flags=lanczos,palettegen", str(palette)])
-        code, log = _run([
+        await _run(["ffmpeg", "-y", "-i", str(concat_mp4), "-vf", f"fps={min(24, fps)},scale={W//2}:-1:flags=lanczos,palettegen", str(palette)])
+        code, log = await _run([
             "ffmpeg", "-y", "-i", str(concat_mp4), "-i", str(palette),
             "-lavfi", f"fps={min(24, fps)},scale={W//2}:-1:flags=lanczos[x];[x][1:v]paletteuse",
             str(final_path),
@@ -240,7 +245,7 @@ async def render_project(
         else:
             cmd_final += ["-an"]
         cmd_final += [str(final_path)]
-        code, log = _run(cmd_final)
+        code, log = await _run(cmd_final)
     if code != 0:
         raise RuntimeError(f"Final encode failed: {log[-1500:]}")
 
@@ -250,8 +255,8 @@ async def render_project(
     return f"renders/{final_name}"
 
 
-def _make_placeholder(path: Path, w: int, h: int, label: str) -> None:
-    _run([
+async def _make_placeholder(path: Path, w: int, h: int, label: str) -> None:
+    await _run([
         "ffmpeg", "-y",
         "-f", "lavfi", "-i", f"color=c=#121212:s={w}x{h}",
         "-vf", f"drawtext=fontfile={FONT_FILE}:text='{_ffmpeg_escape(label)}':fontcolor=white:fontsize=80:x=(w-text_w)/2:y=(h-text_h)/2",

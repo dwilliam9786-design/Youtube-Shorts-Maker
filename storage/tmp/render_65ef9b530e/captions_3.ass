@@ -1,0 +1,25 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Active,Arial Black,96,&H000AD6FF&,&H000AD6FF&,&H00000000&,&H88000000&,1,0,0,0,100,100,0,0,1,6,2,2,40,40,576,1
+Style: Phrase,Arial Black,42,&H00FFFFFF&,&H00FFFFFF&,&H00000000&,&H66000000&,1,0,0,0,100,100,0,0,1,4,1,2,40,40,422,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:00.66,Phrase,,0,0,0,,GET THE ANSWER
+Dialogue: 1,0:00:00.00,0:00:00.20,Active,,0,0,0,,GET
+Dialogue: 1,0:00:00.20,0:00:00.38,Active,,0,0,0,,THE
+Dialogue: 1,0:00:00.38,0:00:00.66,Active,,0,0,0,,ANSWER
+Dialogue: 0,0:00:01.14,0:00:01.54,Phrase,,0,0,0,,BUILD THE THING
+Dialogue: 1,0:00:01.14,0:00:01.14,Active,,0,0,0,,BUILD
+Dialogue: 1,0:00:01.14,0:00:01.36,Active,,0,0,0,,THE
+Dialogue: 1,0:00:01.36,0:00:01.54,Active,,0,0,0,,THING
+Dialogue: 0,0:00:01.82,0:00:02.12,Phrase,,0,0,0,,SHIP IT
+Dialogue: 1,0:00:01.82,0:00:01.94,Active,,0,0,0,,SHIP
+Dialogue: 1,0:00:01.94,0:00:02.12,Active,,0,0,0,,IT

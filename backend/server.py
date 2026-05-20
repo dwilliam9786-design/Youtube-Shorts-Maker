@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks
+from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -192,11 +192,11 @@ async def start_render(req: RenderRequest, bg: BackgroundTasks):
     job = RenderJob(project_id=req.project_id, status="queued", progress=0, message="Queued")
     await renders.insert_one(job.model_dump())
 
-    bg.add_task(_run_render, job.id, project)
-    return {"job_id": job.id, "status": "queued"}
+    bg.add_task(_run_render, job.id, project, req.fps, req.out_format)
+    return {"job_id": job.id, "status": "queued", "fps": req.fps, "out_format": req.out_format}
 
 
-async def _run_render(job_id: str, project: dict):
+async def _run_render(job_id: str, project: dict, fps: int = 30, out_format: str = "mp4"):
     async def cb(pct: int, msg: str):
         await renders.update_one(
             {"id": job_id},
@@ -208,8 +208,8 @@ async def _run_render(job_id: str, project: dict):
             {"id": job_id},
             {"$set": {"status": "running", "progress": 1, "message": "Starting", "updated_at": _now()}},
         )
-        rel_path = await render_project(project, progress_cb=cb)
-        final_url = f"/api/storage/{rel_path}"  # served via storage endpoint
+        rel_path = await render_project(project, fps=fps, out_format=out_format, progress_cb=cb)
+        final_url = f"/api/storage/{rel_path}"
         await renders.update_one(
             {"id": job_id},
             {"$set": {
@@ -274,6 +274,64 @@ async def meta():
             {"id": "hormozi_subs", "label": "Hormozi Subs"},
             {"id": "documentary", "label": "Documentary Pacing"},
         ],
+        "effects": [
+            {"id": "shake", "label": "Shake"},
+            {"id": "rgb_split", "label": "RGB Split"},
+            {"id": "glitch", "label": "Glitch"},
+            {"id": "blur_reveal", "label": "Blur Reveal"},
+            {"id": "vignette", "label": "Vignette"},
+            {"id": "film_burn", "label": "Film Burn"},
+            {"id": "flash", "label": "Flash"},
+            {"id": "speed_ramp", "label": "Speed Ramp"},
+        ],
+        "animations": [
+            {"id": "ken_burns_in", "label": "Ken Burns In"},
+            {"id": "ken_burns_out", "label": "Ken Burns Out"},
+            {"id": "punch_in", "label": "Punch In"},
+            {"id": "slow_pan", "label": "Slow Pan"},
+            {"id": "none", "label": "None"},
+        ],
+        "transitions": [
+            {"id": "fade", "label": "Fade"},
+            {"id": "flash", "label": "Flash"},
+            {"id": "zoom", "label": "Zoom"},
+            {"id": "swipe", "label": "Swipe"},
+        ],
+        "speakers": [
+            {"id": "primary", "label": "Primary", "color": "#FFD60A"},
+            {"id": "speaker2", "label": "Speaker 2", "color": "#00E0B4"},
+            {"id": "speaker3", "label": "Speaker 3", "color": "#FF7043"},
+            {"id": "speaker4", "label": "Speaker 4", "color": "#9BFF00"},
+        ],
+        "formats": [
+            {"id": "mp4", "label": "MP4 (H.264 + AAC)"},
+            {"id": "webm", "label": "WebM (VP9 + Opus)"},
+            {"id": "mov", "label": "MOV (H.264 + AAC)"},
+            {"id": "gif", "label": "GIF (no audio)"},
+        ],
+        "fps_options": [20, 24, 30, 48, 60, 90],
+    }
+
+
+# ----- Upload -----
+@api.post("/uploads")
+async def upload_file(file: UploadFile = File(...), kind: str = Form("image")):
+    """Save user uploads (image/video/audio) and return /api/storage URL."""
+    ext = Path(file.filename or "").suffix.lower() or ".bin"
+    name = f"{_uid()}{ext}"
+    dest = STORAGE_DIR / "uploads" / name
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    contents = await file.read()
+    dest.write_bytes(contents)
+    media_type = "video" if ext in {".mp4", ".mov", ".webm", ".m4v"} else (
+        "audio" if ext in {".mp3", ".wav", ".m4a", ".ogg"} else "image"
+    )
+    return {
+        "url": f"/api/storage/uploads/{name}",
+        "filename": file.filename,
+        "size": len(contents),
+        "media_type": media_type,
+        "kind": kind,
     }
 
 

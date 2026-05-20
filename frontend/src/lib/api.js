@@ -14,9 +14,15 @@ export const apiClient = {
   generate: (body) => api.post('/projects/generate', body).then((r) => r.data),
   createBlank: (body) => api.post('/projects/blank', body).then((r) => r.data),
   library: (q, type = 'image') => api.get('/library/search', { params: { q, type } }).then((r) => r.data),
-  startRender: (project_id) => api.post('/renders', { project_id }).then((r) => r.data),
+  startRender: (body) => api.post('/renders', typeof body === 'string' ? { project_id: body } : body).then((r) => r.data),
   getRender: (job_id) => api.get(`/renders/${job_id}`).then((r) => r.data),
   listRenders: () => api.get('/renders').then((r) => r.data),
+  upload: (file, kind = 'image') => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('kind', kind);
+    return api.post('/uploads', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then((r) => r.data);
+  },
 };
 
 export const resolveMedia = (url) => {

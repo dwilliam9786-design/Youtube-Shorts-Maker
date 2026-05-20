@@ -1,0 +1,30 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Active,Arial Black,96,&H000AD6FF&,&H000AD6FF&,&H00000000&,&H88000000&,1,0,0,0,100,100,0,0,1,6,2,2,40,40,576,1
+Style: Phrase,Arial Black,42,&H00FFFFFF&,&H00FFFFFF&,&H00000000&,&H66000000&,1,0,0,0,100,100,0,0,1,4,1,2,40,40,422,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:00.82,Phrase,,0,0,0,,MOST PEOPLE STAY
+Dialogue: 1,0:00:00.00,0:00:00.32,Active,,0,0,0,,MOST
+Dialogue: 1,0:00:00.32,0:00:00.58,Active,,0,0,0,,PEOPLE
+Dialogue: 1,0:00:00.58,0:00:00.82,Active,,0,0,0,,STAY
+Dialogue: 0,0:00:00.82,0:00:01.76,Phrase,,0,0,0,,BROKE BECAUSE THEY
+Dialogue: 1,0:00:00.82,0:00:01.20,Active,,0,0,0,,BROKE
+Dialogue: 1,0:00:01.20,0:00:01.54,Active,,0,0,0,,BECAUSE
+Dialogue: 1,0:00:01.54,0:00:01.76,Active,,0,0,0,,THEY
+Dialogue: 0,0:00:01.76,0:00:03.08,Phrase,,0,0,0,,CONFUSE BEING BUSY
+Dialogue: 1,0:00:01.76,0:00:02.28,Active,,0,0,0,,CONFUSE
+Dialogue: 1,0:00:02.28,0:00:02.64,Active,,0,0,0,,BEING
+Dialogue: 1,0:00:02.64,0:00:03.08,Active,,0,0,0,,BUSY
+Dialogue: 0,0:00:03.08,0:00:04.24,Phrase,,0,0,0,,WITH MAKING PROGRESS
+Dialogue: 1,0:00:03.08,0:00:03.60,Active,,0,0,0,,WITH
+Dialogue: 1,0:00:03.60,0:00:03.82,Active,,0,0,0,,MAKING
+Dialogue: 1,0:00:03.82,0:00:04.24,Active,,0,0,0,,PROGRESS

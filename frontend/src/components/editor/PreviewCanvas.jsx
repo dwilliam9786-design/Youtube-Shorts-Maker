@@ -1,6 +1,13 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { useEditorStore } from '../../lib/store';
 import { resolveMedia } from '../../lib/api';
+
+const SPEAKER_COLORS = {
+  primary: '#FFD60A',
+  speaker2: '#00E0B4',
+  speaker3: '#FF7043',
+  speaker4: '#9BFF00',
+};
 
 const aspectStyle = {
   '9:16': { aspectRatio: '9 / 16' },
@@ -11,6 +18,7 @@ const aspectStyle = {
 export default function PreviewCanvas() {
   const { project, currentTime, isPlaying, setCurrentTime, setPlaying } = useEditorStore();
   const audioRef = useRef(null);
+  const musicRef = useRef(null);
   const rafRef = useRef(null);
   const startedAtRef = useRef(0);
   const baseTimeRef = useRef(0);
@@ -21,7 +29,6 @@ export default function PreviewCanvas() {
     [scenes]
   );
 
-  // Determine active scene + local offset
   const { activeScene, sceneLocal, activeIdx } = useMemo(() => {
     let t = 0;
     for (let i = 0; i < scenes.length; i++) {
@@ -34,16 +41,19 @@ export default function PreviewCanvas() {
     return { activeScene: last, sceneLocal: last?.duration || 0, activeIdx: scenes.length - 1 };
   }, [scenes, currentTime]);
 
-  // Playback loop
+  // RAF playback loop
   useEffect(() => {
     if (!isPlaying) {
       cancelAnimationFrame(rafRef.current);
-      if (audioRef.current) audioRef.current.pause();
       return;
     }
+    if (currentTime >= total - 0.05) {
+      setCurrentTime(0);
+      baseTimeRef.current = 0;
+    } else {
+      baseTimeRef.current = currentTime;
+    }
     startedAtRef.current = performance.now();
-    baseTimeRef.current = currentTime >= total - 0.05 ? 0 : currentTime;
-    if (currentTime >= total - 0.05) setCurrentTime(0);
 
     const tick = () => {
       const elapsed = (performance.now() - startedAtRef.current) / 1000;
@@ -59,30 +69,61 @@ export default function PreviewCanvas() {
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
     // eslint-disable-next-line
-  }, [isPlaying, total]);
+  }, [isPlaying]);
 
-  // Sync per-scene audio
+  // Set audio source whenever active scene CHANGES (not every frame)
   useEffect(() => {
     const a = audioRef.current;
-    if (!a || !activeScene) return;
+    if (!a) return;
     const src = audioSrcFor(activeScene);
     if (!src) {
       a.pause();
+      a.removeAttribute('src');
+      a.load();
       return;
     }
-    if (a.dataset.src !== src) {
-      a.src = src;
-      a.dataset.src = src;
-    }
+    if (a.dataset.src === src) return;
+    a.dataset.src = src;
+    a.src = src;
+    a.load();
+    const onReady = () => {
+      a.currentTime = Math.max(0, Math.min(a.duration || 0, sceneLocal));
+      if (isPlaying) a.play().catch(() => {});
+      a.removeEventListener('canplay', onReady);
+    };
+    a.addEventListener('canplay', onReady);
+    // eslint-disable-next-line
+  }, [activeScene?.id]);
+
+  // Play/pause audio when isPlaying toggles
+  useEffect(() => {
+    const a = audioRef.current;
+    if (!a) return;
     if (isPlaying) {
-      try {
-        if (Math.abs(a.currentTime - sceneLocal) > 0.4) a.currentTime = Math.max(0, sceneLocal);
+      if (a.readyState >= 2) {
+        a.currentTime = Math.max(0, Math.min(a.duration || 0, sceneLocal));
         a.play().catch(() => {});
-      } catch (e) {}
+      }
+      if (musicRef.current && project?.music_url) musicRef.current.play().catch(() => {});
     } else {
       a.pause();
+      if (musicRef.current) musicRef.current.pause();
     }
-  }, [activeScene?.id, isPlaying, sceneLocal]);
+    // eslint-disable-next-line
+  }, [isPlaying]);
+
+  // Drift correction: every 250ms re-align audio.currentTime if off by > 0.35s
+  useEffect(() => {
+    if (!isPlaying) return;
+    const id = setInterval(() => {
+      const a = audioRef.current;
+      if (!a || a.readyState < 2) return;
+      if (Math.abs(a.currentTime - sceneLocal) > 0.35) {
+        a.currentTime = Math.max(0, Math.min(a.duration || 0, sceneLocal));
+      }
+    }, 300);
+    return () => clearInterval(id);
+  }, [isPlaying, sceneLocal]);
 
   if (!project) return null;
 
@@ -97,8 +138,6 @@ export default function PreviewCanvas() {
         ) : (
           <div className="absolute inset-0 grid place-items-center text-ink-muted">No scenes</div>
         )}
-
-        {/* Scene counter */}
         <div className="absolute top-3 left-3 font-mono text-xs text-white/80 px-2 py-1 rounded bg-black/50 backdrop-blur">
           {activeIdx >= 0 ? `${activeIdx + 1}/${scenes.length}` : '—'}
         </div>
@@ -106,7 +145,16 @@ export default function PreviewCanvas() {
           {fmtTC(currentTime)} / {fmtTC(total)}
         </div>
       </div>
-      <audio ref={audioRef} preload="auto" />
+      <audio ref={audioRef} preload="auto" crossOrigin="anonymous" />
+      {project.music_url && (
+        <audio
+          ref={musicRef}
+          src={resolveMedia(project.music_url)}
+          preload="auto"
+          loop
+          volume={0.2}
+        />
+      )}
     </div>
   );
 }
@@ -114,7 +162,6 @@ export default function PreviewCanvas() {
 function audioSrcFor(scene) {
   if (!scene?.voiceover_url) return '';
   const raw = scene.voiceover_url;
-  // backend stores local fs path; expose via /api/storage/voiceover/<file>
   if (raw.startsWith('http')) return raw;
   if (raw.startsWith('/api/')) return resolveMedia(raw);
   const parts = raw.split('/');
@@ -131,53 +178,109 @@ function fmtTC(t) {
 }
 
 function SceneFrame({ scene, sceneLocal }) {
-  // Ken Burns CSS based on scene.animation
-  const t = sceneLocal / Math.max(0.01, scene.duration);
+  const t = Math.min(1, sceneLocal / Math.max(0.01, scene.duration));
   const k = scene.animation;
   let transform = 'scale(1.05)';
   if (k === 'ken_burns_in') transform = `scale(${1.05 + 0.15 * t})`;
   if (k === 'ken_burns_out') transform = `scale(${1.25 - 0.15 * t})`;
   if (k === 'punch_in') transform = `scale(${1.0 + 0.25 * t})`;
   if (k === 'slow_pan') transform = `scale(1.15) translateX(${-2 + 6 * t}%)`;
+  if (k === 'none') transform = 'scale(1)';
+
+  const effects = scene.effects || [];
+  const filters = [];
+  if (effects.includes('vignette')) filters.push('contrast(1.05)');
+  if (effects.includes('film_burn')) filters.push('sepia(0.18) saturate(1.2)');
+  if (effects.includes('blur_reveal')) {
+    const blur = Math.max(0, 8 - sceneLocal * 10);
+    if (blur > 0) filters.push(`blur(${blur}px)`);
+  }
+  if (effects.includes('glitch')) filters.push('hue-rotate(8deg)');
+  const filterCss = filters.join(' ') || 'none';
+
+  const shake = effects.includes('shake') ? `translate(${Math.sin(sceneLocal * 30) * 4}px, ${Math.cos(sceneLocal * 30) * 4}px)` : '';
+  const finalTransform = `${transform} ${shake}`.trim();
+  const showFlash = effects.includes('flash') && sceneLocal < 0.12;
+  const showRgb = effects.includes('rgb_split');
+
+  const mediaSrc = scene.video_url ? resolveMedia(scene.video_url) : scene.image_url;
 
   return (
     <div className="absolute inset-0">
-      {scene.image_url ? (
-        <img
-          src={scene.image_url}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover transition-transform duration-100"
-          style={{ transform }}
-        />
+      {showRgb && mediaSrc && (
+        <>
+          <img src={mediaSrc} alt="" className="absolute inset-0 w-full h-full object-cover mix-blend-screen" style={{ transform: `${finalTransform} translateX(-6px)`, filter: 'brightness(0.6) sepia(1) saturate(8) hue-rotate(-30deg)' }} />
+          <img src={mediaSrc} alt="" className="absolute inset-0 w-full h-full object-cover mix-blend-screen" style={{ transform: `${finalTransform} translateX(6px)`, filter: 'brightness(0.6) sepia(1) saturate(8) hue-rotate(180deg)' }} />
+        </>
+      )}
+      {mediaSrc ? (
+        scene.video_url ? (
+          <video
+            src={mediaSrc}
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ transform: finalTransform, filter: filterCss }}
+          />
+        ) : (
+          <img
+            src={mediaSrc}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-75"
+            style={{ transform: finalTransform, filter: filterCss }}
+          />
+        )
       ) : (
         <div className="absolute inset-0 bg-bg-panel grid place-items-center text-ink-muted text-sm font-mono">
           {scene.script?.slice(0, 60) || 'No visual'}
         </div>
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+      {showFlash && <div className="absolute inset-0 bg-white" style={{ opacity: (0.12 - sceneLocal) / 0.12 * 0.85 }} />}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
       <CaptionOverlay scene={scene} sceneLocal={sceneLocal} />
     </div>
   );
 }
 
 function CaptionOverlay({ scene, sceneLocal }) {
-  const cap = (scene.captions || []).find((c) => sceneLocal >= c.start - 0.02 && sceneLocal <= c.end + 0.02);
+  const cap = (scene.captions || []).find(
+    (c) => sceneLocal >= c.start - 0.02 && sceneLocal <= c.end + 0.02
+  );
   if (!cap) return null;
+  const speaker = cap.speaker || scene.speaker || 'primary';
+  const color = SPEAKER_COLORS[speaker] || SPEAKER_COLORS.primary;
+  const activeWord = (cap.words || []).find(
+    (w) => sceneLocal >= w.start - 0.02 && sceneLocal <= w.end + 0.02
+  );
+
   return (
-    <div className="absolute inset-x-4 bottom-[14%] flex justify-center pointer-events-none">
-      <div className="font-display font-black tracking-tight text-center px-4" style={{ fontSize: 'clamp(22px, 5vw, 56px)' }}>
-        {cap.words && cap.words.length > 0 ? (
-          cap.words.map((w, i) => {
-            const active = sceneLocal >= w.start - 0.02 && sceneLocal <= w.end + 0.02;
-            return (
-              <span key={i} className={`kara ${active ? 'active' : ''} mx-1`} style={{ color: active ? '#FFD60A' : 'white' }}>
-                {w.word.toUpperCase()}
-              </span>
-            );
-          })
-        ) : (
-          <span className="text-white">{cap.text.toUpperCase()}</span>
-        )}
+    <div className="absolute inset-x-4 bottom-[12%] flex flex-col items-center pointer-events-none gap-2">
+      {/* Active word — big, colored */}
+      <div
+        className="font-display font-black tracking-tighter text-center px-4"
+        style={{
+          color,
+          fontSize: 'clamp(36px, 8vw, 92px)',
+          WebkitTextStroke: '2px black',
+          textShadow: '0 6px 24px rgba(0,0,0,0.7)',
+          transform: activeWord ? 'scale(1.04)' : 'scale(0.95)',
+          transition: 'transform 90ms ease-out',
+        }}
+      >
+        {(activeWord?.word || '').toUpperCase()}
+      </div>
+      {/* Full phrase — smaller, dimmed */}
+      <div
+        className="font-display font-bold tracking-tight text-center px-4 opacity-60"
+        style={{
+          color: 'white',
+          fontSize: 'clamp(16px, 3vw, 32px)',
+          textShadow: '0 2px 8px rgba(0,0,0,0.6)',
+        }}
+      >
+        {cap.text.toUpperCase()}
       </div>
     </div>
   );

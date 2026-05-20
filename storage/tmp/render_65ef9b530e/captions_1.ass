@@ -1,0 +1,29 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Active,Arial Black,96,&H000AD6FF&,&H000AD6FF&,&H00000000&,&H88000000&,1,0,0,0,100,100,0,0,1,6,2,2,40,40,576,1
+Style: Phrase,Arial Black,42,&H00FFFFFF&,&H00FFFFFF&,&H00000000&,&H66000000&,1,0,0,0,100,100,0,0,1,4,1,2,40,40,422,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:00.80,Phrase,,0,0,0,,THEY'RE DOING A
+Dialogue: 1,0:00:00.00,0:00:00.26,Active,,0,0,0,,THEY'RE
+Dialogue: 1,0:00:00.26,0:00:00.54,Active,,0,0,0,,DOING
+Dialogue: 1,0:00:00.54,0:00:00.80,Active,,0,0,0,,A
+Dialogue: 0,0:00:00.80,0:00:02.20,Phrase,,0,0,0,,LOT BUT NOTHING
+Dialogue: 1,0:00:00.80,0:00:01.24,Active,,0,0,0,,LOT
+Dialogue: 1,0:00:01.82,0:00:01.98,Active,,0,0,0,,BUT
+Dialogue: 1,0:00:01.98,0:00:02.20,Active,,0,0,0,,NOTHING
+Dialogue: 0,0:00:02.20,0:00:03.20,Phrase,,0,0,0,,THAT ACTUALLY CHANGES
+Dialogue: 1,0:00:02.20,0:00:02.52,Active,,0,0,0,,THAT
+Dialogue: 1,0:00:02.52,0:00:02.88,Active,,0,0,0,,ACTUALLY
+Dialogue: 1,0:00:02.88,0:00:03.20,Active,,0,0,0,,CHANGES
+Dialogue: 0,0:00:03.20,0:00:03.68,Phrase,,0,0,0,,THE SCORE
+Dialogue: 1,0:00:03.20,0:00:03.54,Active,,0,0,0,,THE
+Dialogue: 1,0:00:03.54,0:00:03.68,Active,,0,0,0,,SCORE

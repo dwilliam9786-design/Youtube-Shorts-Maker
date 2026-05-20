@@ -5,13 +5,15 @@ import { Film, AudioLines, Type, Music, ZoomIn, ZoomOut } from 'lucide-react';
 const PX_PER_SEC_DEFAULT = 80;
 
 export default function Timeline() {
-  const { project, currentTime, setCurrentTime, selectedSceneId, selectScene } = useEditorStore();
+  const {
+    project, currentTime, setCurrentTime, selectedSceneIds, selectScene, reorderScenes,
+  } = useEditorStore();
   const scenes = project?.scenes || [];
   const total = scenes.reduce((acc, s) => acc + (s.duration || 0), 0);
   const [pxPerSec, setPxPerSec] = useState(PX_PER_SEC_DEFAULT);
+  const [dragOver, setDragOver] = useState(null);
   const stripRef = useRef(null);
 
-  // Offsets
   const offsets = useMemo(() => {
     const arr = [];
     let t = 0;
@@ -25,6 +27,8 @@ export default function Timeline() {
   const trackWidth = Math.max(800, total * pxPerSec + 200);
 
   const onRulerClick = (e) => {
+    // Only scrub when clicking the empty timeline (not a clip)
+    if (e.target.closest('[data-clip]')) return;
     const rect = stripRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left + stripRef.current.scrollLeft;
     setCurrentTime(Math.max(0, Math.min(total, x / pxPerSec)));
@@ -38,36 +42,38 @@ export default function Timeline() {
     if (playheadX > el.scrollLeft + el.clientWidth - 100) el.scrollLeft = playheadX - el.clientWidth + 200;
   }, [currentTime, pxPerSec]);
 
+  const onDropClip = (toIdx) => (e) => {
+    e.preventDefault();
+    const fromIdx = parseInt(e.dataTransfer.getData('text/scene-idx'), 10);
+    if (!Number.isFinite(fromIdx) || fromIdx === toIdx) {
+      setDragOver(null);
+      return;
+    }
+    reorderScenes(fromIdx, toIdx);
+    setDragOver(null);
+  };
+
   return (
     <div className="h-full flex flex-col bg-bg-panel border-t border-white/8">
-      {/* Top toolbar */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/8">
         <div className="flex items-center gap-2 text-xs text-ink-secondary font-mono">
           <span>Timeline</span>
           <span className="text-ink-muted">·</span>
           <span>{scenes.length} scenes</span>
+          {selectedSceneIds.length > 1 && <span className="text-accent">· {selectedSceneIds.length} selected</span>}
         </div>
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setPxPerSec((p) => Math.max(20, p - 20))}
-            data-testid="timeline-zoom-out"
-            className="p-1.5 hover:bg-white/5 rounded"
-          >
+          <button onClick={() => setPxPerSec((p) => Math.max(20, p - 20))} data-testid="timeline-zoom-out" className="p-1.5 hover:bg-white/5 rounded">
             <ZoomOut className="w-3.5 h-3.5" />
           </button>
           <span className="font-mono text-[10px] text-ink-muted w-10 text-center">{pxPerSec}px</span>
-          <button
-            onClick={() => setPxPerSec((p) => Math.min(200, p + 20))}
-            data-testid="timeline-zoom-in"
-            className="p-1.5 hover:bg-white/5 rounded"
-          >
+          <button onClick={() => setPxPerSec((p) => Math.min(200, p + 20))} data-testid="timeline-zoom-in" className="p-1.5 hover:bg-white/5 rounded">
             <ZoomIn className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Track labels */}
         <div className="w-32 shrink-0 border-r border-white/8 bg-bg-base">
           {[
             { icon: Film, label: 'VIDEO' },
@@ -76,16 +82,13 @@ export default function Timeline() {
             { icon: Music, label: 'MUSIC' },
           ].map(({ icon: Icon, label }) => (
             <div key={label} className="h-16 flex items-center gap-2 px-3 border-b border-white/5 text-[10px] uppercase tracking-[0.18em] text-ink-secondary">
-              <Icon className="w-3.5 h-3.5" />
-              {label}
+              <Icon className="w-3.5 h-3.5" /> {label}
             </div>
           ))}
         </div>
 
-        {/* Tracks scrollable */}
         <div ref={stripRef} className="flex-1 overflow-x-auto overflow-y-hidden relative no-scrollbar" onClick={onRulerClick}>
           <div style={{ width: trackWidth }} className="relative">
-            {/* Ruler */}
             <div className="h-6 sticky top-0 z-10 bg-bg-panel border-b border-white/8 ruler" style={{ backgroundSize: `${pxPerSec}px 100%` }}>
               {Array.from({ length: Math.ceil(total) + 2 }).map((_, i) => (
                 <span key={i} className="absolute top-1 text-[10px] font-mono text-ink-muted" style={{ left: i * pxPerSec + 4 }}>
@@ -94,33 +97,38 @@ export default function Timeline() {
               ))}
             </div>
 
-            {/* Video track */}
+            {/* Video clips track (with drag-reorder) */}
             <Track height={64}>
               {scenes.map((sc, i) => (
                 <Clip
                   key={sc.id}
                   scene={sc}
+                  idx={i}
                   left={offsets[i] * pxPerSec}
                   width={Math.max(20, (sc.duration || 0) * pxPerSec)}
-                  selected={selectedSceneId === sc.id}
-                  onSelect={() => selectScene(sc.id)}
+                  selected={selectedSceneIds.includes(sc.id)}
+                  onSelect={(e) => selectScene(sc.id, { shift: e.shiftKey, meta: e.metaKey || e.ctrlKey })}
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/scene-idx', String(i));
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    setDragOver(i);
+                  }}
+                  onDrop={onDropClip(i)}
+                  dragOver={dragOver === i}
                 />
               ))}
             </Track>
 
-            {/* Captions track */}
             <Track height={64}>
               {scenes.map((sc, i) => (
-                <CaptionTrack
-                  key={sc.id}
-                  scene={sc}
-                  left={offsets[i] * pxPerSec}
-                  pxPerSec={pxPerSec}
-                />
+                <CaptionTrack key={sc.id} scene={sc} left={offsets[i] * pxPerSec} pxPerSec={pxPerSec} />
               ))}
             </Track>
 
-            {/* Voiceover track */}
             <Track height={64}>
               {scenes.map((sc, i) => (
                 <AudioBar
@@ -133,14 +141,12 @@ export default function Timeline() {
               ))}
             </Track>
 
-            {/* Music track placeholder */}
             <Track height={64}>
               {project?.music_url && (
                 <AudioBar left={0} width={total * pxPerSec} label="Music" color="#60A5FA" />
               )}
             </Track>
 
-            {/* Playhead */}
             <div
               className="absolute top-0 bottom-0 w-px bg-accent z-20 pointer-events-none"
               style={{ left: currentTime * pxPerSec, boxShadow: '0 0 6px #FFD60A' }}
@@ -150,40 +156,47 @@ export default function Timeline() {
           </div>
         </div>
       </div>
+      <div className="px-3 py-1 text-[10px] text-ink-muted border-t border-white/5 font-mono">
+        Tip: Drag clips to reorder · Shift+click to multi-select · Space = play/pause · Cmd/Ctrl+S = save
+      </div>
     </div>
   );
 }
 
 function Track({ height, children }) {
-  return (
-    <div className="relative border-b border-white/5" style={{ height }}>
-      {children}
-    </div>
-  );
+  return <div className="relative border-b border-white/5" style={{ height }}>{children}</div>;
 }
 
-function Clip({ scene, left, width, selected, onSelect }) {
+function Clip({ scene, idx, left, width, selected, onSelect, onDragStart, onDragOver, onDrop, dragOver }) {
   return (
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        onSelect();
-      }}
+    <div
+      data-clip
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onClick={onSelect}
       data-testid={`clip-${scene.id}`}
-      className={`absolute top-2 bottom-2 rounded-md overflow-hidden border ${
+      className={`absolute top-2 bottom-2 rounded-md overflow-hidden border cursor-grab active:cursor-grabbing select-none group text-left ${
         selected ? 'border-accent ring-1 ring-accent/40' : 'border-white/10 hover:border-white/30'
-      } group text-left`}
+      } ${dragOver ? 'ring-2 ring-accent' : ''}`}
       style={{ left, width }}
     >
-      {scene.image_url ? (
+      {scene.video_url ? (
+        <video src={scene.video_url} className="absolute inset-0 w-full h-full object-cover opacity-80" muted />
+      ) : scene.image_url ? (
         <img src={scene.image_url} alt="" className="absolute inset-0 w-full h-full object-cover opacity-80" />
       ) : (
         <div className="absolute inset-0 bg-bg-track" />
       )}
       <div className="relative px-2 py-1.5 text-[10px] font-mono text-white bg-gradient-to-r from-black/80 to-transparent truncate">
-        {(scene.script || '').slice(0, 40)}
+        <span className="text-accent mr-1">{idx + 1}</span>
+        {(scene.script || '').slice(0, 36)}
       </div>
-    </button>
+      {(scene.effects || []).length > 0 && (
+        <div className="absolute bottom-1 right-1 text-[9px] font-mono text-black bg-accent px-1 rounded">FX {scene.effects.length}</div>
+      )}
+    </div>
   );
 }
 
@@ -194,7 +207,7 @@ function CaptionTrack({ scene, left, pxPerSec }) {
       {caps.map((c) => (
         <div
           key={c.id}
-          className="absolute top-2 h-12 rounded bg-accent/15 border border-accent/40 px-1.5 text-[10px] font-bold text-accent flex items-center overflow-hidden"
+          className="absolute top-2 h-12 rounded bg-accent/15 border border-accent/40 px-1.5 text-[10px] font-bold text-accent flex items-center overflow-hidden pointer-events-none"
           style={{ left: c.start * pxPerSec, width: Math.max(20, (c.end - c.start) * pxPerSec) }}
           title={c.text}
         >
@@ -208,7 +221,7 @@ function CaptionTrack({ scene, left, pxPerSec }) {
 function AudioBar({ left, width, label, color }) {
   return (
     <div
-      className="absolute top-2 bottom-2 rounded-md border overflow-hidden flex items-center px-2 text-[10px] font-mono text-white"
+      className="absolute top-2 bottom-2 rounded-md border overflow-hidden flex items-center px-2 text-[10px] font-mono text-white pointer-events-none"
       style={{ left, width, background: `${color}22`, borderColor: `${color}66` }}
     >
       <svg className="absolute inset-y-0 left-0 right-0 w-full h-full opacity-50">

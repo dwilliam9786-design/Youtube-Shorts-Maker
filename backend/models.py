@@ -35,11 +35,14 @@ class Scene(BaseModel):
     index: int
     script: str
     duration: float = 0.0
-    voiceover_url: Optional[str] = None  # served as /storage/...
-    image_url: Optional[str] = None  # absolute remote URL (Pixabay etc.)
+    voiceover_url: Optional[str] = None  # local fs path or http url
+    image_url: Optional[str] = None
+    video_url: Optional[str] = None  # uploaded user video (mp4) overrides image
     keywords: List[str] = []
     transition_in: str = "fade"
     animation: str = "ken_burns_in"
+    effects: List[str] = []
+    speaker: str = "primary"
     captions: List[Caption] = []
 
 
@@ -70,6 +73,8 @@ class GenerateRequest(BaseModel):
 
 class RenderRequest(BaseModel):
     project_id: str
+    fps: int = 30
+    out_format: str = "mp4"  # mp4, webm, mov, gif
 
 
 class RenderJob(BaseModel):

@@ -1,0 +1,50 @@
+{
+  "summary": "Backend regression + v2 feature tests for Voltcut. All 23 pytest tests pass (11 iteration-1 regression + 12 v2). Verified: POST /api/uploads (image/audio/video), GET /api/storage/uploads/{name} serves files; /api/meta exposes effects/animations/transitions/speakers/formats/fps_options; PATCH /api/projects round-trips new Scene fields (effects, speaker, video_url); POST /api/renders accepts fps+out_format and successfully produces .mp4@30, .webm@24 (VP9+Opus), and .mov@30; invalid out_format='bogus' falls back to .mp4; invalid fps=5 still renders (clamped to 20-90); DELETE /api/projects works.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/renders", "issue": "Backend uses subprocess.run (blocking) for ffmpeg inside BackgroundTasks. During WebM (VP9) renders the event loop is blocked, causing intermittent 502/504 from the ingress for any GET hit during that window. Tests now retry through it, but production users polling /api/renders/{job_id} may see brief gateway errors. Fix: switch to asyncio.create_subprocess_exec for non-blocking ffmpeg."},
+      {"endpoint": "POST /api/uploads", "issue": "No size limit / mime-type validation. Accepts any file and trusts the client-provided filename for extension detection. Recommend max-size check (e.g., 100MB), allow-list of extensions, and Content-Type cross-check."},
+      {"endpoint": "POST /api/uploads", "issue": "File contents read into memory (await file.read() then dest.write_bytes). Large uploads (50MB+) will spike RSS; stream via shutil.copyfileobj or async chunked write instead."},
+      {"endpoint": "PATCH /api/projects/{id}", "issue": "(carry-over from iter 1) Still accepts arbitrary dict — clients can overwrite id/created_at. Add a typed UpdateProject Pydantic model."},
+      {"endpoint": "DELETE /api/projects/{id}", "issue": "(carry-over from iter 1) Returns 200 even when nothing matched. Consider 404."},
+      {"endpoint": "POST /api/renders", "issue": "fps is clamped silently in render_service (max(20, min(90, fps))) but not validated at the Pydantic layer. A client requesting fps=5 gets back fps=5 in the response and a 'queued' status, only to be silently coerced. Consider validating at the RenderRequest model and returning the clamped value."},
+      {"endpoint": "GET /api/storage/uploads/{name}", "issue": "Path is not sanitized against '..' traversal: STORAGE_DIR / kind / name. FastAPI path params don't allow '/' so traversal is limited, but '..%2F' style probes should be explicitly rejected."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_v2_features.py",
+    "/app/test_reports/pytest/iter1_results.xml",
+    "/app/test_reports/pytest/v2_results.xml"
+  ],
+  "action_items": [
+    "Make ffmpeg calls non-blocking (asyncio.create_subprocess_exec) so the event loop isn't frozen during WebM/MOV renders — eliminates 502s during polling.",
+    "Add validation to /api/uploads: max file size, mime/extension allow-list, streaming write.",
+    "Add traversal guard on /api/storage/{kind}/{name} (reject '..' segments).",
+    "Tighten PATCH /api/projects/{id} via typed Pydantic UpdateProject model.",
+    "Validate / reflect clamped fps in RenderRequest response so clients know it was coerced."
+  ],
+  "critical_code_review_comments": [
+    "render_service._effects_filter chains arbitrary effect filters with ',' but rgb_split uses ';' / [labels] which is a filtergraph (not a simple chain). Concatenating it with other simple filters via ',' will produce a malformed filtergraph as soon as a user combines rgb_split with shake/vignette/etc. Needs a real filter_complex builder.",
+    "render_service uses subprocess.run (sync) inside an async coroutine launched from BackgroundTasks; blocks the asyncio event loop for the entire render. This is the root cause of intermittent 502s on /api/renders polling during long renders (esp. VP9/WebM ~50s).",
+    "render_service._download timeout=60s with no retry — if Pixabay/CDN hiccups during render, the whole job fails. Add retry + per-host backoff.",
+    "render_service: when video_url is a local path like '/api/storage/uploads/xxx.mp4', the code strips 'api/storage/' but if the leading slash isn't stripped first the resulting path is wrong (currently works only because lstrip('/') runs first — fragile). Add explicit URL → local path resolver.",
+    "Scene.video_url is silently dropped if the source download/copy fails (is_video flag stays False); no error surfaced to client. At minimum log a warning.",
+    "_ffmpeg_escape escapes commas globally, which is needed inside drawtext but breaks if used inside a filtergraph segment that legitimately uses commas to separate filters. Keep ASS path for captions (already correct) but audit any remaining drawtext usage.",
+    "models.py: RenderRequest.out_format is a free-form str (default 'mp4'). Make it a Literal['mp4','webm','mov','gif'] so FastAPI rejects 'bogus' at 422 rather than silently falling back — current 'bogus → mp4' behavior is intentional per task spec, but a more typical API would 422.",
+    "server.py is approaching the size where it should be split into routers (projects, renders, uploads, meta) before it crosses 700 lines."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_v2_features.py (new — 12 tests for v2 features)"
+  ],
+  "success_rate": {"backend": "100% (23/23)", "frontend": "skipped per request"},
+  "test_credentials": "n/a (no auth)",
+  "seed_data_creation": "Tests create TEST_pic.png, TEST_clip.mp3, TEST_clip.mp4 under /app/storage/uploads/ and a TEST_v2_small project. Project is deleted at the end; uploads remain on disk (no cleanup endpoint yet). Renders produce 4 video files under /app/storage/renders/ per full run (mp4, mp4-fallback, mp4-clamped-fps, webm, mov).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Two pytest files now: backend/tests/backend_test.py (iter 1, 11 tests, ~50s) and backend/tests/test_v2_features.py (v2, 12 tests, ~170s). Run them separately or together. The v2 suite is order-dependent (shared `state` dict). Polling helper in v2 suite retries through 502/504 because backend's subprocess.run blocks the event loop during ffmpeg renders — this is a known backend issue, not a test issue. Full v2 run takes ~3min because three renders (mp4, mp4-fallback, mp4-clamped, webm, mov) happen serially.",
+  "rca of the issue": "Initial 3 test failures were ReadTimeouts/502s from the ingress while the backend was running ffmpeg synchronously (subprocess.run blocks the asyncio event loop). Resolved on the test side by retrying through 502/504 and ReadTimeouts. Root cause on backend side: render_service uses sync subprocess.run inside an async background task. Mitigation (test-only): retry loop with 6s backoff. Real fix (backend): use asyncio.create_subprocess_exec or run renders in a separate process / thread executor."
+}

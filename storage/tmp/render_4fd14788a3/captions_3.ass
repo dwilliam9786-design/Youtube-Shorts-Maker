@@ -1,0 +1,22 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Active,FreeSans,110,&H000AD6FF&,&H000AD6FF&,&H00000000&,&H99000000&,1,0,0,0,100,100,0,0,3,10,2,2,40,40,921,1
+Style: Phrase,FreeSans,36,&H00FFFFFF&,&H00FFFFFF&,&H00000000&,&H66000000&,1,0,0,0,100,100,0,0,3,5,1,2,40,40,768,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.00,0:00:00.20,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}GET
+Dialogue: 1,0:00:00.20,0:00:00.38,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}THE
+Dialogue: 1,0:00:00.38,0:00:00.66,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}ANSWER
+Dialogue: 1,0:00:01.14,0:00:01.14,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}BUILD
+Dialogue: 1,0:00:01.14,0:00:01.36,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}THE
+Dialogue: 1,0:00:01.36,0:00:01.54,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}THING
+Dialogue: 1,0:00:01.82,0:00:01.94,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}SHIP
+Dialogue: 1,0:00:01.94,0:00:02.12,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}IT

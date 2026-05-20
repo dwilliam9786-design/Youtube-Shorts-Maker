@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 3 (caption editing + caption_style system) backend testing complete. Added /app/backend/tests/test_v3_caption_style.py with 9 new tests covering: GET /api/meta has the 5 new keys (caption_presets x5, caption_fonts x5, caption_positions x3, caption_backgrounds x3, caption_animations x4); POST /api/projects/blank returns CaptionStyle default with preset='viral_pop', font='bold_sans', position='bottom', background='none', uppercase=true, show_phrase=true; POST /api/projects/generate populates caption_style on result; PATCH /api/projects/{id} caption_style override round-trips through GET with all 13 fields preserved; PATCH partial scene edits (captions[].text + captions[].words[].word) persist; PATCH with an unknown preset 'totally_made_up_preset_xyz' still succeeds (free-form acceptance); POST /api/renders mp4@30 with hormozi style (position=middle, background=dark_box, show_phrase=false) completes -> served video > 400KB; POST /api/renders mp4@30 with mrbeast preset (background=accent_box, active_color=#FF3B30) completes -> served video > 400KB. Final result: 9/9 v3 tests + 14/14 v2.1 regression = 23/23 passing in 87s.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PATCH /api/projects/{id}", "issue": "caption_style is accepted as raw dict (no Pydantic validation) — a client can store partial caption_style missing required defaults (e.g. only {'preset':'hormozi','position':'middle'} with no size_active/stroke/colors). On next render the server still works because render_service falls back to CAPTION_PRESETS, but the project resource now exposes an incomplete caption_style to other consumers. Consider validating via the CaptionStyle pydantic model in PATCH (merging with defaults) so the stored doc is always full-shape."},
+      {"endpoint": "PATCH /api/projects/{id}", "issue": "(carry-over) Still accepts arbitrary dict — clients can overwrite id/created_at. Add typed UpdateProject Pydantic model."},
+      {"endpoint": "DELETE /api/projects/{id}", "issue": "(carry-over) Returns 200 even when nothing matched."},
+      {"endpoint": "POST /api/renders", "issue": "(carry-over) fps clamped silently in render_service."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_v3_caption_style.py",
+    "/app/backend/tests/test_v21_hardening.py",
+    "/app/test_reports/pytest/v3_results.xml",
+    "/app/test_reports/pytest/v3_full.xml"
+  ],
+  "action_items": [
+    "No blocking issues. Optional: validate caption_style in PATCH via Pydantic to enforce full-shape storage; this also prevents partial overrides from masking defaults across consumers.",
+    "Environment note for main agent / deployer: ffmpeg was MISSING from the preview container at test start (which caused the initial two render tests to fail with FileNotFoundError from uvloop subprocess_exec). The testing agent ran `apt-get install -y ffmpeg` (5.1.9-0+deb12u1) to unblock testing. This must be baked into the container image or installed in a startup script — otherwise every fresh deploy will break /api/renders."
+  ],
+  "critical_code_review_comments": [
+    "models.CaptionStyle is well-typed (13 fields with sensible defaults). Good.",
+    "server.create_blank uses Project() with default_factory=CaptionStyle so blank projects ship full caption_style. Good.",
+    "server.generate_project also creates Project() with default caption_style — caption_style survives the subsequent $set of scenes since $set only touches scene/duration/thumbnail/status fields. Good.",
+    "server.update_project still accepts raw dict and $sets it verbatim — caption_style override therefore is not merged with defaults (acceptable for now, but documented above).",
+    "render_service references CAPTION_PRESETS by id with fallback (verified: unknown preset still renders via the user-supplied fields — confirmed end-to-end with the 'totally_made_up_preset_xyz' edge test followed by render in a separate scenario).",
+    "server.py is ~406 lines — still under split threshold but trending up; consider splitting routers (projects, renders, meta, uploads) when adding the next feature."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_v3_caption_style.py (new — 9 tests, ~80s including 2 mp4 renders)"
+  ],
+  "success_rate": {"backend": "100% (23/23: 9 new v3 + 14 v2.1 regression; v1/v2 mp4@30 path covered via v2.1 hardening tests)", "frontend": "skipped per request"},
+  "test_credentials": "n/a (no auth)",
+  "seed_data_creation": "Creates TEST_v3_blank and TEST_v3_gen projects (deleted in test_zzz_cleanup). Uses existing project d02d7856f0a64662a462225c81657585 for renders; that project's caption_style is mutated by the render tests (last applied: mrbeast preset). No DB leftovers from v3 test creates.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Four pytest files now under /app/backend/tests/: backend_test.py (iter1 regression, 11 tests, ~50s), test_v2_features.py (v2 regression, 12 tests — webm/mov add ~3min if included), test_v21_hardening.py (iter2.1 hardening, 14 tests, ~50s), test_v3_caption_style.py (iter3 caption_style, 9 tests, ~80s). FFMPEG MUST BE PRESENT in /usr/bin/ffmpeg before render tests — verify with `which ffmpeg` first; if missing run `apt-get install -y ffmpeg`. Existing render-ready project: d02d7856f0a64662a462225c81657585 (4 scenes). Caption_style on that project is currently mrbeast — patch back to viral_pop if needed.",
+  "rca of the issue": "Initial 2/9 failures (test_render_mp4_hormozi_style, test_render_mp4_mrbeast_style) RCA: backend log showed FileNotFoundError [Errno 2] at uvloop/handles/process.pyx UVProcess._init from asyncio.create_subprocess_exec called in render_service._run. `which ffmpeg` returned not-found — the binary that asyncio is trying to exec was absent from the container. Fix: `apt-get install -y ffmpeg` (got ffmpeg 5.1.9-0+deb12u1). Re-ran the two render tests + full 23-test suite — all green. This is an environmental gap (image/Dockerfile missing ffmpeg), NOT a code regression. Main agent should ensure ffmpeg is in the runtime image or installed via a startup hook."
+}

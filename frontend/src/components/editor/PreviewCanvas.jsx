@@ -245,43 +245,77 @@ function SceneFrame({ scene, sceneLocal }) {
 }
 
 function CaptionOverlay({ scene, sceneLocal }) {
+  const project = useEditorStore.getState().project;
+  const style = project?.caption_style || {};
   const cap = (scene.captions || []).find(
     (c) => sceneLocal >= c.start - 0.02 && sceneLocal <= c.end + 0.02
   );
   if (!cap) return null;
   const speaker = cap.speaker || scene.speaker || 'primary';
-  const color = SPEAKER_COLORS[speaker] || SPEAKER_COLORS.primary;
+  const activeColor = style.active_color || SPEAKER_COLORS[speaker] || SPEAKER_COLORS.primary;
+  const phraseColor = style.phrase_color || '#FFFFFF';
+  const sizeActive = style.size_active || 96;
+  const sizePhrase = style.size_phrase || 42;
+  const stroke = style.stroke_width ?? 6;
+  const upper = style.uppercase !== false;
+  const showPhrase = style.show_phrase !== false && sizePhrase > 0;
+  const position = style.position || 'bottom';
+  const bg = style.background || 'none';
+  const fontFamily = ({
+    bold_sans: 'Satoshi, system-ui, sans-serif',
+    display: '"Cabinet Grotesk", system-ui, sans-serif',
+    narrow: '"Arial Narrow", sans-serif',
+    mono: '"JetBrains Mono", monospace',
+    serif: 'Georgia, serif',
+  })[style.font || 'bold_sans'];
+
   const activeWord = (cap.words || []).find(
     (w) => sceneLocal >= w.start - 0.02 && sceneLocal <= w.end + 0.02
   );
 
+  const positionClass = position === 'middle' ? 'top-1/2 -translate-y-1/2' : position === 'top' ? 'top-[10%]' : 'bottom-[12%]';
+
+  const boxStyleActive =
+    bg === 'dark_box' ? { background: 'rgba(0,0,0,0.6)', padding: '0.15em 0.5em', borderRadius: 8 } :
+    bg === 'accent_box' ? { background: activeColor + '55', padding: '0.15em 0.5em', borderRadius: 8 } : {};
+  const boxStylePhrase =
+    bg === 'dark_box' ? { background: 'rgba(0,0,0,0.4)', padding: '0.1em 0.5em', borderRadius: 6 } : {};
+
+  const transform = activeWord ? 'scale(1.04)' : 'scale(0.95)';
+  const animEnabled = (style.animation || 'pop') !== 'none';
+
   return (
-    <div className="absolute inset-x-4 bottom-[12%] flex flex-col items-center pointer-events-none gap-2">
-      {/* Active word — big, colored */}
+    <div className={`absolute inset-x-4 flex flex-col items-center pointer-events-none gap-2 ${positionClass}`}>
       <div
-        className="font-display font-black tracking-tighter text-center px-4"
+        className="font-black tracking-tighter text-center px-1"
         style={{
-          color,
-          fontSize: 'clamp(36px, 8vw, 92px)',
-          WebkitTextStroke: '2px black',
+          color: activeColor,
+          fontFamily,
+          fontSize: `clamp(${Math.max(20, sizeActive * 0.4)}px, ${sizeActive / 14}vw, ${sizeActive}px)`,
+          WebkitTextStroke: stroke > 0 ? `${Math.max(1, stroke / 3)}px black` : 'none',
           textShadow: '0 6px 24px rgba(0,0,0,0.7)',
-          transform: activeWord ? 'scale(1.04)' : 'scale(0.95)',
+          transform: animEnabled ? transform : 'none',
           transition: 'transform 90ms ease-out',
+          ...boxStyleActive,
         }}
       >
-        {(activeWord?.word || '').toUpperCase()}
+        {(upper ? (activeWord?.word || '').toUpperCase() : activeWord?.word || '')}
       </div>
-      {/* Full phrase — smaller, dimmed */}
-      <div
-        className="font-display font-bold tracking-tight text-center px-4 opacity-60"
-        style={{
-          color: 'white',
-          fontSize: 'clamp(16px, 3vw, 32px)',
-          textShadow: '0 2px 8px rgba(0,0,0,0.6)',
-        }}
-      >
-        {cap.text.toUpperCase()}
-      </div>
+      {showPhrase && (
+        <div
+          className="font-bold tracking-tight text-center px-1"
+          style={{
+            color: phraseColor,
+            opacity: 0.7,
+            fontFamily,
+            fontSize: `clamp(14px, ${sizePhrase / 22}vw, ${sizePhrase}px)`,
+            textShadow: '0 2px 8px rgba(0,0,0,0.6)',
+            ...boxStylePhrase,
+          }}
+        >
+          {upper ? cap.text.toUpperCase() : cap.text}
+        </div>
+      )}
     </div>
   );
 }

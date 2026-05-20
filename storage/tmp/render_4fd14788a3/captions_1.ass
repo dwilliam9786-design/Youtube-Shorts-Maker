@@ -1,0 +1,25 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Active,FreeSans,110,&H000AD6FF&,&H000AD6FF&,&H00000000&,&H99000000&,1,0,0,0,100,100,0,0,3,10,2,2,40,40,921,1
+Style: Phrase,FreeSans,36,&H00FFFFFF&,&H00FFFFFF&,&H00000000&,&H66000000&,1,0,0,0,100,100,0,0,3,5,1,2,40,40,768,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.00,0:00:00.26,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}THEY'RE
+Dialogue: 1,0:00:00.26,0:00:00.54,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}DOING
+Dialogue: 1,0:00:00.54,0:00:00.80,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}A
+Dialogue: 1,0:00:00.80,0:00:01.24,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}LOT
+Dialogue: 1,0:00:01.82,0:00:01.98,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}BUT
+Dialogue: 1,0:00:01.98,0:00:02.20,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}NOTHING
+Dialogue: 1,0:00:02.20,0:00:02.52,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}THAT
+Dialogue: 1,0:00:02.52,0:00:02.88,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}ACTUALLY
+Dialogue: 1,0:00:02.88,0:00:03.20,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}CHANGES
+Dialogue: 1,0:00:03.20,0:00:03.54,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}THE
+Dialogue: 1,0:00:03.54,0:00:03.68,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}SCORE

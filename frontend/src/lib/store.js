@@ -60,6 +60,46 @@ export const useEditorStore = create((set, get) => ({
       });
       return { project: { ...s.project, scenes } };
     }),
+  updateCaption: (sceneId, capId, patch) =>
+    set((s) => {
+      if (!s.project) return s;
+      const scenes = s.project.scenes.map((sc) => {
+        if (sc.id !== sceneId) return sc;
+        const captions = (sc.captions || []).map((c) => (c.id === capId ? { ...c, ...patch } : c));
+        return { ...sc, captions };
+      });
+      return { project: { ...s.project, scenes } };
+    }),
+  updateWord: (sceneId, capId, wordIdx, patch) =>
+    set((s) => {
+      if (!s.project) return s;
+      const scenes = s.project.scenes.map((sc) => {
+        if (sc.id !== sceneId) return sc;
+        const captions = (sc.captions || []).map((c) => {
+          if (c.id !== capId) return c;
+          const words = [...(c.words || [])];
+          if (words[wordIdx]) words[wordIdx] = { ...words[wordIdx], ...patch };
+          return { ...c, words };
+        });
+        return { ...sc, captions };
+      });
+      return { project: { ...s.project, scenes } };
+    }),
+  removeCaption: (sceneId, capId) =>
+    set((s) => {
+      if (!s.project) return s;
+      const scenes = s.project.scenes.map((sc) => {
+        if (sc.id !== sceneId) return sc;
+        return { ...sc, captions: (sc.captions || []).filter((c) => c.id !== capId) };
+      });
+      return { project: { ...s.project, scenes } };
+    }),
+  setCaptionStyle: (patch) =>
+    set((s) => {
+      if (!s.project) return s;
+      const cur = s.project.caption_style || {};
+      return { project: { ...s.project, caption_style: { ...cur, ...patch } } };
+    }),
   reorderScenes: (fromIdx, toIdx) =>
     set((s) => {
       if (!s.project) return s;

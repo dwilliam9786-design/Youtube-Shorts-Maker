@@ -325,6 +325,36 @@ async def meta():
             {"id": "gif", "label": "GIF (no audio)"},
         ],
         "fps_options": [20, 24, 30, 48, 60, 90],
+        "caption_presets": [
+            {"id": "viral_pop", "label": "Viral Pop", "desc": "Yellow active word + white phrase"},
+            {"id": "hormozi",   "label": "Hormozi",   "desc": "Big middle, no phrase, dark backdrop"},
+            {"id": "mrbeast",   "label": "MrBeast",   "desc": "Massive red+white with accent box"},
+            {"id": "minimal",   "label": "Minimal",   "desc": "Clean white, single line"},
+            {"id": "subtitle",  "label": "Subtitle",  "desc": "Small bottom subtitle bar"},
+        ],
+        "caption_fonts": [
+            {"id": "bold_sans", "label": "Bold Sans"},
+            {"id": "display",   "label": "Display"},
+            {"id": "narrow",    "label": "Narrow"},
+            {"id": "mono",      "label": "Mono"},
+            {"id": "serif",     "label": "Serif"},
+        ],
+        "caption_positions": [
+            {"id": "top",    "label": "Top"},
+            {"id": "middle", "label": "Middle"},
+            {"id": "bottom", "label": "Bottom"},
+        ],
+        "caption_backgrounds": [
+            {"id": "none",       "label": "None"},
+            {"id": "accent_box", "label": "Accent Box"},
+            {"id": "dark_box",   "label": "Dark Box"},
+        ],
+        "caption_animations": [
+            {"id": "pop",   "label": "Pop"},
+            {"id": "fade",  "label": "Fade"},
+            {"id": "slide", "label": "Slide"},
+            {"id": "none",  "label": "None"},
+        ],
     }
 
 

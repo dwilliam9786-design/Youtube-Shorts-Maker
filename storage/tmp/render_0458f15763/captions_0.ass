@@ -1,0 +1,26 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Active,FreeSans,110,&H000AD6FF&,&H000AD6FF&,&H00000000&,&H99000000&,1,0,0,0,100,100,0,0,3,10,2,2,40,40,921,1
+Style: Phrase,FreeSans,36,&H00FFFFFF&,&H00FFFFFF&,&H00000000&,&H66000000&,1,0,0,0,100,100,0,0,3,5,1,2,40,40,768,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.00,0:00:00.32,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}MOST
+Dialogue: 1,0:00:00.32,0:00:00.58,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}PEOPLE
+Dialogue: 1,0:00:00.58,0:00:00.82,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}STAY
+Dialogue: 1,0:00:00.82,0:00:01.20,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}BROKE
+Dialogue: 1,0:00:01.20,0:00:01.54,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}BECAUSE
+Dialogue: 1,0:00:01.54,0:00:01.76,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}THEY
+Dialogue: 1,0:00:01.76,0:00:02.28,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}CONFUSE
+Dialogue: 1,0:00:02.28,0:00:02.64,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}BEING
+Dialogue: 1,0:00:02.64,0:00:03.08,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}BUSY
+Dialogue: 1,0:00:03.08,0:00:03.60,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}WITH
+Dialogue: 1,0:00:03.60,0:00:03.82,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}MAKING
+Dialogue: 1,0:00:03.82,0:00:04.24,Active,,0,0,0,,{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}PROGRESS

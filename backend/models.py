@@ -46,6 +46,22 @@ class Scene(BaseModel):
     captions: List[Caption] = []
 
 
+class CaptionStyle(BaseModel):
+    preset: str = "viral_pop"     # viral_pop, hormozi, mrbeast, minimal, subtitle
+    font: str = "bold_sans"       # bold_sans, display, mono, narrow
+    active_color: str = "#FFD60A"
+    phrase_color: str = "#FFFFFF"
+    phrase_opacity: float = 0.55
+    position: str = "bottom"      # bottom, middle, top
+    size_active: int = 96
+    size_phrase: int = 42
+    stroke_width: int = 6
+    background: str = "none"      # none, accent_box, dark_box
+    uppercase: bool = True
+    animation: str = "pop"        # pop, fade, slide, none
+    show_phrase: bool = True
+
+
 class Project(BaseModel):
     id: str = Field(default_factory=_uid)
     title: str = "Untitled Video"
@@ -53,6 +69,7 @@ class Project(BaseModel):
     script: str = ""
     voice: str = "nova"
     caption_theme: str = "viral_pop"
+    caption_style: CaptionStyle = Field(default_factory=CaptionStyle)
     scenes: List[Scene] = []
     music_url: Optional[str] = None
     total_duration: float = 0.0

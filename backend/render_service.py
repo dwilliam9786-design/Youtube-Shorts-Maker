@@ -25,6 +25,52 @@ if not Path(FONT_FILE).exists():
         FONT_FILE = str(p)
         break
 
+# Font registry for caption styling
+FONT_FILES = {
+    "bold_sans": "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "display":   "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+    "narrow":    "/usr/share/fonts/truetype/liberation/LiberationSansNarrow-Bold.ttf",
+    "mono":      "/usr/share/fonts/truetype/liberation/LiberationMono-Bold.ttf",
+    "serif":     "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf",
+}
+# Font display names that libass will use (ASS Fontname field)
+FONT_NAMES = {
+    "bold_sans": "Liberation Sans",
+    "display":   "FreeSans",
+    "narrow":    "Liberation Sans Narrow",
+    "mono":      "Liberation Mono",
+    "serif":     "Liberation Serif",
+}
+
+# Caption style presets (server-side defaults used when no project caption_style supplied)
+CAPTION_PRESETS = {
+    "viral_pop": {
+        "font": "display", "active_color": "#FFD60A", "phrase_color": "#FFFFFF",
+        "size_active": 96, "size_phrase": 42, "stroke_width": 6,
+        "position": "bottom", "background": "none", "show_phrase": True,
+    },
+    "hormozi": {
+        "font": "display", "active_color": "#FFFFFF", "phrase_color": "#FFD60A",
+        "size_active": 110, "size_phrase": 56, "stroke_width": 10,
+        "position": "middle", "background": "dark_box", "show_phrase": False,
+    },
+    "mrbeast": {
+        "font": "display", "active_color": "#FF3B30", "phrase_color": "#FFFFFF",
+        "size_active": 120, "size_phrase": 48, "stroke_width": 12,
+        "position": "middle", "background": "accent_box", "show_phrase": False,
+    },
+    "minimal": {
+        "font": "bold_sans", "active_color": "#FFFFFF", "phrase_color": "#FFFFFF",
+        "size_active": 72, "size_phrase": 36, "stroke_width": 4,
+        "position": "bottom", "background": "none", "show_phrase": False,
+    },
+    "subtitle": {
+        "font": "bold_sans", "active_color": "#FFFFFF", "phrase_color": "#FFFFFF",
+        "size_active": 54, "size_phrase": 0, "stroke_width": 3,
+        "position": "bottom", "background": "dark_box", "show_phrase": False,
+    },
+}
+
 ASPECT_DIMS = {"9:16": (1080, 1920), "1:1": (1080, 1080), "16:9": (1920, 1080)}
 
 # Format -> (extension, video codec, audio codec, extra flags)
@@ -143,7 +189,8 @@ async def render_project(
         # Write ASS subtitle file for this scene; use libass for karaoke captions
         ass_path = work / f"captions_{i}.ass"
         speaker = sc.get("speaker", "primary")
-        if captions and _write_ass(ass_path, captions, W, H, speaker):
+        caption_style = project.get("caption_style") or {}
+        if captions and _write_ass(ass_path, captions, W, H, speaker, caption_style):
             ass_arg = str(ass_path).replace(":", "\\:")
             caption_vf = f"subtitles='{ass_arg}'"
         else:
@@ -335,16 +382,66 @@ def _ass_escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}").replace("\n", "\\N")
 
 
-def _write_ass(path: Path, captions: List[Dict[str, Any]], w: int, h: int, speaker: str = "primary") -> bool:
+def _write_ass(
+    path: Path,
+    captions: List[Dict[str, Any]],
+    w: int,
+    h: int,
+    speaker: str = "primary",
+    style: Optional[Dict[str, Any]] = None,
+) -> bool:
     """
-    Write an ASS subtitle file with karaoke per-word coloring.
-    For each caption group:
-      - One Dialogue line with the full phrase (small, white, dim) below
-      - One Dialogue line per word (large, speaker color) at active time
+    Write ASS subtitles with full caption_style support: font, sizes, colors,
+    position, stroke, background, animation, uppercase, show_phrase.
     """
+    # Merge preset with overrides
+    style = dict(style or {})
+    preset_name = style.get("preset", "viral_pop")
+    preset = CAPTION_PRESETS.get(preset_name, CAPTION_PRESETS["viral_pop"])
+    merged = {**preset, **{k: v for k, v in style.items() if v is not None}}
+
+    font_key = merged.get("font", "bold_sans")
+    font_name = FONT_NAMES.get(font_key, "Liberation Sans")
+
     speaker_color = SPEAKER_COLORS.get(speaker, SPEAKER_COLORS["primary"])
-    active_color = _ass_color(speaker_color)
-    white = _ass_color("#FFFFFF")
+    active_color = _ass_color(merged.get("active_color") or speaker_color)
+    phrase_color_hex = merged.get("phrase_color", "#FFFFFF")
+    phrase_color = _ass_color(phrase_color_hex)
+
+    size_active = int(merged.get("size_active", 96))
+    size_phrase = int(merged.get("size_phrase", 42))
+    stroke = int(merged.get("stroke_width", 6))
+    background = merged.get("background", "none")  # none | accent_box | dark_box
+    uppercase = bool(merged.get("uppercase", True))
+    show_phrase = bool(merged.get("show_phrase", True))
+    animation = merged.get("animation", "pop")
+    position = merged.get("position", "bottom")  # bottom, middle, top
+
+    # ASS BorderStyle: 1 = outline+drop-shadow, 3 = opaque box behind text
+    if background == "dark_box":
+        border_style = 3
+        back_color_active = "&H99000000&"
+        back_color_phrase = "&H66000000&"
+    elif background == "accent_box":
+        border_style = 3
+        back_color_active = active_color.replace("&H00", "&HAA")  # semi-transparent fill
+        back_color_phrase = "&H99000000&"
+    else:
+        border_style = 1
+        back_color_active = "&H88000000&"
+        back_color_phrase = "&H66000000&"
+
+    # Vertical margin from bottom (ASS Alignment 2 = bottom-center)
+    # We position via MarginV measured from the alignment edge
+    if position == "middle":
+        margin_active = int(h * 0.48)
+        margin_phrase = int(h * 0.40)
+    elif position == "top":
+        margin_active = int(h * 0.78)
+        margin_phrase = int(h * 0.70)
+    else:  # bottom
+        margin_active = int(h * 0.30)
+        margin_phrase = int(h * 0.22)
 
     header = f"""[Script Info]
 ScriptType: v4.00+
@@ -355,36 +452,54 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Active,Arial Black,96,{active_color},{active_color},&H00000000&,&H88000000&,1,0,0,0,100,100,0,0,1,6,2,2,40,40,{int(h*0.30)},1
-Style: Phrase,Arial Black,42,{white},{white},&H00000000&,&H66000000&,1,0,0,0,100,100,0,0,1,4,1,2,40,40,{int(h*0.22)},1
+Style: Active,{font_name},{size_active},{active_color},{active_color},&H00000000&,{back_color_active},1,0,0,0,100,100,0,0,{border_style},{stroke},2,2,40,40,{margin_active},1
+Style: Phrase,{font_name},{size_phrase},{phrase_color},{phrase_color},&H00000000&,{back_color_phrase},1,0,0,0,100,100,0,0,{border_style if size_phrase else 1},{max(2, stroke // 2)},1,2,40,40,{margin_phrase},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
+    # Animation override tags
+    def fx_tag():
+        if animation == "fade":
+            return r"{\fad(120,80)}"
+        if animation == "slide":
+            return r"{\move(540,1100,540,1056,0,140)}"
+        if animation == "pop":
+            return r"{\fscx80\fscy80\t(0,80,\fscx105\fscy105)\t(80,160,\fscx100\fscy100)}"
+        return ""
+
     lines = []
     for cap in captions:
         cap_start = float(cap.get("start", 0))
         cap_end = float(cap.get("end", cap_start + 1))
-        phrase = _ass_escape((cap.get("text") or "").upper().strip())[:120]
-        if phrase:
+        phrase_text = (cap.get("text") or "").strip()
+        if uppercase:
+            phrase_text = phrase_text.upper()
+        phrase_text = _ass_escape(phrase_text)[:140]
+
+        if phrase_text and show_phrase and size_phrase > 0:
             lines.append(
-                f"Dialogue: 0,{_ass_time(cap_start)},{_ass_time(cap_end)},Phrase,,0,0,0,,{phrase}"
+                f"Dialogue: 0,{_ass_time(cap_start)},{_ass_time(cap_end)},Phrase,,0,0,0,,{phrase_text}"
             )
+
         words = cap.get("words") or []
-        if not words and phrase:
+        if not words and phrase_text:
             lines.append(
-                f"Dialogue: 1,{_ass_time(cap_start)},{_ass_time(cap_end)},Active,,0,0,0,,{phrase}"
+                f"Dialogue: 1,{_ass_time(cap_start)},{_ass_time(cap_end)},Active,,0,0,0,,{fx_tag()}{phrase_text}"
             )
             continue
         for w_obj in words:
-            wtext = _ass_escape((w_obj.get("word") or "").upper().strip())[:40]
+            wtext = (w_obj.get("word") or "").strip()
+            if uppercase:
+                wtext = wtext.upper()
+            wtext = _ass_escape(wtext)[:40]
             if not wtext:
                 continue
             s = float(w_obj.get("start", 0))
             e = float(w_obj.get("end", s + 0.2))
             lines.append(
-                f"Dialogue: 1,{_ass_time(s)},{_ass_time(e)},Active,,0,0,0,,{wtext}"
+                f"Dialogue: 1,{_ass_time(s)},{_ass_time(e)},Active,,0,0,0,,{fx_tag()}{wtext}"
             )
 
     if not lines:

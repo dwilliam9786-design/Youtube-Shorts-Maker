@@ -19,7 +19,7 @@ from ai_service import (
     split_into_scenes, synthesize_voice, transcribe_words, build_caption_groups,
 )
 from pixabay_service import search_pixabay, fetch_first_image_for_keywords
-from render_service import render_project, STORAGE_DIR
+from render_service import render_project, render_dependencies, STORAGE_DIR
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -200,6 +200,10 @@ async def library_search(q: str = "", type: str = "image"):
 # ----- Render -----
 @api.post("/renders")
 async def start_render(req: RenderRequest, bg: BackgroundTasks):
+    deps = render_dependencies()
+    if not deps["available"]:
+        missing = [name for name, path in deps["binaries"].items() if not path]
+        raise HTTPException(503, f"Render tools unavailable: missing {', '.join(missing)} on PATH")
     project = await projects.find_one({"id": req.project_id}, {"_id": 0})
     if not project:
         raise HTTPException(404, "Project not found")
@@ -269,6 +273,7 @@ async def list_renders():
 # ----- Voices & Themes meta -----
 @api.get("/meta")
 async def meta():
+    render_tools = render_dependencies()
     return {
         "voices": [
             {"id": "alloy", "label": "Alloy — Neutral"},
@@ -327,6 +332,7 @@ async def meta():
             {"id": "gif", "label": "GIF (no audio)"},
         ],
         "fps_options": [20, 24, 30, 48, 60, 90],
+        "render_tools": render_tools,
         "caption_presets": [
             {"id": "viral_pop", "label": "Viral Pop", "desc": "Yellow active word + white phrase"},
             {"id": "hormozi",   "label": "Hormozi",   "desc": "Big middle, no phrase, dark backdrop"},

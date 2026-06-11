@@ -16,14 +16,16 @@ const aspectStyle = {
 };
 
 export default function PreviewCanvas() {
-  const { project, currentTime, isPlaying, setCurrentTime, setPlaying } = useEditorStore();
+  const { project, currentTime, isPlaying, setCurrentTime, setPlaying, updateScene } = useEditorStore();
   const audioRef = useRef(null);
   const musicRef = useRef(null);
   const rafRef = useRef(null);
   const startedAtRef = useRef(0);
   const baseTimeRef = useRef(0);
+  const currentTimeRef = useRef(0);
+  const sceneLocalRef = useRef(0);
 
-  const scenes = project?.scenes || [];
+  const scenes = useMemo(() => project?.scenes || [], [project?.scenes]);
   const total = useMemo(
     () => scenes.reduce((acc, s) => acc + (s.duration || 0), 0),
     [scenes]
@@ -41,17 +43,22 @@ export default function PreviewCanvas() {
     return { activeScene: last, sceneLocal: last?.duration || 0, activeIdx: scenes.length - 1 };
   }, [scenes, currentTime]);
 
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+    sceneLocalRef.current = sceneLocal;
+  }, [currentTime, sceneLocal]);
+
   // RAF playback loop
   useEffect(() => {
     if (!isPlaying) {
       cancelAnimationFrame(rafRef.current);
       return;
     }
-    if (currentTime >= total - 0.05) {
+    if (currentTimeRef.current >= total - 0.05) {
       setCurrentTime(0);
       baseTimeRef.current = 0;
     } else {
-      baseTimeRef.current = currentTime;
+      baseTimeRef.current = currentTimeRef.current;
     }
     startedAtRef.current = performance.now();
 
@@ -68,8 +75,7 @@ export default function PreviewCanvas() {
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-    // eslint-disable-next-line
-  }, [isPlaying]);
+  }, [isPlaying, setCurrentTime, setPlaying, total]);
 
   // Set audio source whenever active scene CHANGES (not every frame)
   useEffect(() => {
@@ -92,8 +98,7 @@ export default function PreviewCanvas() {
       a.removeEventListener('canplay', onReady);
     };
     a.addEventListener('canplay', onReady);
-    // eslint-disable-next-line
-  }, [activeScene?.id]);
+  }, [activeScene, isPlaying, sceneLocal]);
 
   // Play/pause audio when isPlaying toggles
   useEffect(() => {
@@ -101,7 +106,7 @@ export default function PreviewCanvas() {
     if (!a) return;
     if (isPlaying) {
       if (a.readyState >= 2) {
-        a.currentTime = Math.max(0, Math.min(a.duration || 0, sceneLocal));
+        a.currentTime = Math.max(0, Math.min(a.duration || 0, sceneLocalRef.current));
         a.play().catch(() => {});
       }
       if (musicRef.current && project?.music_url) musicRef.current.play().catch(() => {});
@@ -109,8 +114,7 @@ export default function PreviewCanvas() {
       a.pause();
       if (musicRef.current) musicRef.current.pause();
     }
-    // eslint-disable-next-line
-  }, [isPlaying]);
+  }, [isPlaying, project?.music_url]);
 
   // Drift correction: every 250ms re-align audio.currentTime if off by > 0.35s
   useEffect(() => {
@@ -134,7 +138,7 @@ export default function PreviewCanvas() {
         style={{ ...aspectStyle[project.aspect || '9:16'], height: '100%', maxWidth: '100%' }}
       >
         {activeScene ? (
-          <SceneFrame scene={activeScene} sceneLocal={sceneLocal} />
+          <SceneFrame scene={activeScene} sceneLocal={sceneLocal} updateScene={updateScene} />
         ) : (
           <div className="absolute inset-0 grid place-items-center text-ink-muted">No scenes</div>
         )}
@@ -164,8 +168,11 @@ function audioSrcFor(scene) {
   const raw = scene.voiceover_url;
   if (raw.startsWith('http')) return raw;
   if (raw.startsWith('/api/')) return resolveMedia(raw);
-  const parts = raw.split('/');
+  const normalized = raw.replace(/\\/g, '/');
+  const parts = normalized.split('/');
   const name = parts[parts.length - 1];
+  if (normalized.includes('/voiceover/')) return resolveMedia(`/api/storage/voiceover/${name}`);
+  if (normalized.includes('/uploads/')) return resolveMedia(`/api/storage/uploads/${name}`);
   return resolveMedia(`/api/storage/voiceover/${name}`);
 }
 
@@ -177,7 +184,8 @@ function fmtTC(t) {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${cs.toString().padStart(2, '0')}`;
 }
 
-function SceneFrame({ scene, sceneLocal }) {
+function SceneFrame({ scene, sceneLocal, updateScene }) {
+  const [cropMode, setCropMode] = React.useState(false);
   const t = Math.min(1, sceneLocal / Math.max(0.01, scene.duration));
   const k = scene.animation;
   let transform = 'scale(1.05)';
@@ -204,9 +212,17 @@ function SceneFrame({ scene, sceneLocal }) {
   const showRgb = effects.includes('rgb_split');
 
   const mediaSrc = scene.video_url ? resolveMedia(scene.video_url) : scene.image_url;
+  const cropZoom = Math.max(1, scene.crop_zoom || 1);
+  const cropX = Number(scene.crop_x || 0);
+  const cropY = Number(scene.crop_y || 0);
+  const mediaStyle = {
+    transform: `${finalTransform} scale(${cropZoom})`,
+    objectPosition: `calc(50% + ${cropX}%) calc(50% + ${cropY}%)`,
+    filter: filterCss,
+  };
 
   return (
-    <div className="absolute inset-0">
+    <div className="absolute inset-0" onDoubleClick={() => setCropMode((v) => !v)}>
       {showRgb && mediaSrc && (
         <>
           <img src={mediaSrc} alt="" className="absolute inset-0 w-full h-full object-cover mix-blend-screen" style={{ transform: `${finalTransform} translateX(-6px)`, filter: 'brightness(0.6) sepia(1) saturate(8) hue-rotate(-30deg)' }} />
@@ -222,14 +238,14 @@ function SceneFrame({ scene, sceneLocal }) {
             loop
             playsInline
             className="absolute inset-0 w-full h-full object-cover"
-            style={{ transform: finalTransform, filter: filterCss }}
+            style={mediaStyle}
           />
         ) : (
           <img
             src={mediaSrc}
             alt=""
             className="absolute inset-0 w-full h-full object-cover transition-transform duration-75"
-            style={{ transform: finalTransform, filter: filterCss }}
+            style={mediaStyle}
           />
         )
       ) : (
@@ -239,7 +255,129 @@ function SceneFrame({ scene, sceneLocal }) {
       )}
       {showFlash && <div className="absolute inset-0 bg-white" style={{ opacity: (0.12 - sceneLocal) / 0.12 * 0.85 }} />}
       <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+      {cropMode && <CropOverlay scene={scene} updateScene={updateScene} onClose={() => setCropMode(false)} />}
       <CaptionOverlay scene={scene} sceneLocal={sceneLocal} />
+    </div>
+  );
+}
+
+function CropOverlay({ scene, updateScene, onClose }) {
+  const [drag, setDrag] = React.useState(null);
+  const ref = React.useRef(null);
+
+  const zoom = Math.max(1, scene.crop_zoom || 1);
+  const cropW = Math.min(100, 100 / zoom);
+  const cropH = Math.min(100, 100 / zoom);
+  const left = 50 + (scene.crop_x || 0) - cropW / 2;
+  const top = 50 + (scene.crop_y || 0) - cropH / 2;
+
+  const clampBox = (nextLeft, nextTop, nextW, nextH) => {
+    const clampedW = Math.max(12, Math.min(100, nextW));
+    const clampedH = Math.max(12, Math.min(100, nextH));
+    const clampedLeft = Math.max(0, Math.min(100 - clampedW, nextLeft));
+    const clampedTop = Math.max(0, Math.min(100 - clampedH, nextTop));
+    return { left: clampedLeft, top: clampedTop, width: clampedW, height: clampedH };
+  };
+
+  const applyBox = (box) => {
+    const width = Math.max(12, box.width);
+    const height = Math.max(12, box.height);
+    const nextZoom = Math.max(1, 100 / Math.max(width, height));
+    const nextCropW = 100 / nextZoom;
+    const nextCropH = 100 / nextZoom;
+    const centerX = box.left + nextCropW / 2;
+    const centerY = box.top + nextCropH / 2;
+    updateScene(scene.id, {
+      crop_zoom: nextZoom,
+      crop_x: centerX - 50,
+      crop_y: centerY - 50,
+    });
+  };
+
+  const startDrag = (mode, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = ref.current?.getBoundingClientRect();
+    if (!rect) return;
+    const origin = {
+      x: e.clientX,
+      y: e.clientY,
+      left,
+      top,
+      width: cropW,
+      height: cropH,
+    };
+    setDrag({ mode, origin });
+    const mm = (ev) => {
+      const dx = ((ev.clientX - origin.x) / rect.width) * 100;
+      const dy = ((ev.clientY - origin.y) / rect.height) * 100;
+      let box = { left: origin.left, top: origin.top, width: origin.width, height: origin.height };
+      if (mode === 'move') {
+        box.left = origin.left + dx;
+        box.top = origin.top + dy;
+      } else {
+        if (mode.includes('l')) {
+          box.left = origin.left + dx;
+          box.width = origin.width - dx;
+        }
+        if (mode.includes('r')) {
+          box.width = origin.width + dx;
+        }
+        if (mode.includes('t')) {
+          box.top = origin.top + dy;
+          box.height = origin.height - dy;
+        }
+        if (mode.includes('b')) {
+          box.height = origin.height + dy;
+        }
+      }
+      const clamped = clampBox(box.left, box.top, box.width, box.height);
+      applyBox(clamped);
+    };
+    const mu = () => {
+      window.removeEventListener('mousemove', mm);
+      window.removeEventListener('mouseup', mu);
+      setDrag(null);
+    };
+    window.addEventListener('mousemove', mm);
+    window.addEventListener('mouseup', mu);
+  };
+
+  return (
+    <div ref={ref} className="absolute inset-0 pointer-events-none">
+      <button
+        type="button"
+        className="absolute right-3 top-3 z-10 pointer-events-auto text-[10px] uppercase tracking-[0.18em] text-white bg-black/60 border border-white/10 px-2 py-1 rounded"
+        onClick={onClose}
+      >
+        Done
+      </button>
+      <div
+        className={`absolute border border-accent/90 bg-accent/10 ${drag ? 'shadow-[0_0_0_9999px_rgba(0,0,0,0.2)]' : ''}`}
+        style={{ left: `${left}%`, top: `${top}%`, width: `${cropW}%`, height: `${cropH}%`, pointerEvents: 'auto' }}
+        onMouseDown={(e) => startDrag('move', e)}
+      >
+        {[
+          ['lt', '-left-1.5 -top-1.5 cursor-nwse-resize'],
+          ['rt', '-right-1.5 -top-1.5 cursor-nesw-resize'],
+          ['lb', '-left-1.5 -bottom-1.5 cursor-nesw-resize'],
+          ['rb', '-right-1.5 -bottom-1.5 cursor-nwse-resize'],
+          ['t', 'left-1/2 -top-1.5 -translate-x-1/2 cursor-ns-resize w-3'],
+          ['b', 'left-1/2 -bottom-1.5 -translate-x-1/2 cursor-ns-resize w-3'],
+          ['l', '-left-1.5 top-1/2 -translate-y-1/2 cursor-ew-resize h-3'],
+          ['r', '-right-1.5 top-1/2 -translate-y-1/2 cursor-ew-resize h-3'],
+        ].map(([mode, cls]) => (
+          <button
+            key={mode}
+            type="button"
+            className={`absolute h-3 w-3 rounded-sm border border-accent bg-black/80 ${cls}`}
+            onMouseDown={(e) => startDrag(mode, e)}
+          />
+        ))}
+        <div className="absolute left-2 top-2 text-[10px] font-mono text-white/90 bg-black/60 px-1.5 py-0.5 rounded">
+          Crop
+        </div>
+      </div>
     </div>
   );
 }

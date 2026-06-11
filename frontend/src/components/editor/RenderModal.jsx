@@ -19,11 +19,13 @@ export default function RenderModal({ projectId, onClose }) {
   const [error, setError] = useState(null);
   const [formats, setFormats] = useState(FALLBACK_FORMATS);
   const [fpsOptions, setFpsOptions] = useState(FALLBACK_FPS);
+  const [renderTools, setRenderTools] = useState({ available: true, binaries: {} });
 
   useEffect(() => {
     apiClient.meta().then((m) => {
       if (m.formats) setFormats(m.formats);
       if (m.fps_options) setFpsOptions(m.fps_options);
+      if (m.render_tools) setRenderTools(m.render_tools);
     }).catch(() => {});
   }, []);
 
@@ -116,11 +118,17 @@ export default function RenderModal({ projectId, onClose }) {
 
               <button
                 onClick={startRender}
+                disabled={!renderTools.available}
                 data-testid="render-start-btn"
-                className="w-full bg-accent text-black font-bold px-6 py-3 rounded-md hover:bg-accent-hover"
+                className="w-full bg-accent text-black font-bold px-6 py-3 rounded-md hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Start render
               </button>
+              {!renderTools.available && (
+                <div className="mt-3 text-[11px] text-accent-danger font-mono">
+                  Missing render tools: {Object.entries(renderTools.binaries || {}).filter(([, path]) => !path).map(([name]) => name).join(', ')}
+                </div>
+              )}
             </>
           )}
 

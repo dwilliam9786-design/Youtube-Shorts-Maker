@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useEditorStore } from '../../lib/store';
-import { Trash2, ArrowUp, ArrowDown, Sparkles, Layers, Volume2 } from 'lucide-react';
+import { Trash2, ArrowUp, ArrowDown, Sparkles, Layers, Volume2, Music2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '../../lib/api';
 
@@ -104,18 +104,19 @@ export default function Inspector() {
   return (
     <div className="h-full overflow-y-auto text-sm">
       {/* Tabs */}
-      <div className="flex border-b border-white/8 sticky top-0 bg-bg-panel z-10">
+      <div className="flex flex-wrap border-b border-white/8 sticky top-0 bg-bg-panel z-10">
         <TabBtn active={tab === 'scene'} onClick={() => setTab('scene')} icon={Sparkles} label="Scene" testid="inspector-tab-scene" />
+        <TabBtn active={tab === 'audio'} onClick={() => setTab('audio')} icon={Music2} label="Audio" testid="inspector-tab-audio" />
         <TabBtn active={tab === 'effects'} onClick={() => setTab('effects')} icon={Layers} label="Effects" testid="inspector-tab-effects" />
         <TabBtn active={tab === 'captions'} onClick={() => setTab('captions')} icon={Volume2} label="Captions" testid="inspector-tab-captions" />
       </div>
 
       <div className="p-4">
-        <div className="flex items-center justify-between mb-4">
-          <div className="text-xs uppercase tracking-[0.2em] text-ink-secondary">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
+          <div className="text-xs uppercase tracking-[0.2em] text-ink-secondary break-words">
             {isMulti ? `${selected.length} scenes selected` : `Scene ${idx + 1}`}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 self-end sm:self-auto">
             {!isMulti && (
               <>
                 <button onClick={() => swap(-1)} className="p-1.5 hover:bg-white/5 rounded" data-testid="scene-move-up">
@@ -141,6 +142,9 @@ export default function Inspector() {
             updateSelectedScenes={updateSelectedScenes}
           />
         )}
+        {tab === 'audio' && (
+          <AudioTab scene={scene} isMulti={isMulti} updateScene={updateScene} updateSelectedScenes={updateSelectedScenes} />
+        )}
         {tab === 'effects' && (
           <EffectsTab
             scene={scene}
@@ -160,7 +164,7 @@ function TabBtn({ active, onClick, icon: Icon, label, testid }) {
     <button
       onClick={onClick}
       data-testid={testid}
-      className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] uppercase tracking-[0.18em] border-b-2 transition-colors ${
+      className={`flex-1 min-w-[50%] sm:min-w-0 sm:flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] uppercase tracking-[0.18em] border-b-2 transition-colors ${
         active ? 'border-accent text-white' : 'border-transparent text-ink-secondary hover:text-white'
       }`}
     >
@@ -227,6 +231,46 @@ function SceneTab({ scene, isMulti, meta, updateScene, updateSelectedScenes }) {
         </select>
       </Field>
 
+      <Field label="Crop Zoom">
+        <input
+          type="range"
+          min="1"
+          max="2.5"
+          step="0.01"
+          value={scene.crop_zoom || 1}
+          onChange={(e) => onChange({ crop_zoom: parseFloat(e.target.value) })}
+          className="w-full accent-[#FFD60A]"
+          data-testid="inspector-crop-zoom"
+        />
+        <div className="mt-1 text-[10px] text-ink-muted font-mono">{(scene.crop_zoom || 1).toFixed(2)}x</div>
+      </Field>
+
+      <Field label="Crop X">
+        <input
+          type="range"
+          min="-100"
+          max="100"
+          step="1"
+          value={scene.crop_x || 0}
+          onChange={(e) => onChange({ crop_x: parseInt(e.target.value, 10) })}
+          className="w-full accent-[#FFD60A]"
+          data-testid="inspector-crop-x"
+        />
+      </Field>
+
+      <Field label="Crop Y">
+        <input
+          type="range"
+          min="-100"
+          max="100"
+          step="1"
+          value={scene.crop_y || 0}
+          onChange={(e) => onChange({ crop_y: parseInt(e.target.value, 10) })}
+          className="w-full accent-[#FFD60A]"
+          data-testid="inspector-crop-y"
+        />
+      </Field>
+
       <Field label="Speaker">
         <div className="grid grid-cols-2 gap-1.5">
           {meta.speakers.map((sp) => (
@@ -258,6 +302,64 @@ function SceneTab({ scene, isMulti, meta, updateScene, updateSelectedScenes }) {
   );
 }
 
+function AudioTab({ scene, isMulti, updateScene, updateSelectedScenes }) {
+  const onChange = (patch) => (isMulti ? updateSelectedScenes(patch) : updateScene(scene.id, patch));
+  return (
+    <>
+      <div className="text-[11px] text-ink-secondary leading-relaxed mb-4">
+        Use this tab to offset, trim, and balance the scene voiceover. Shift-click multi-select on the timeline applies changes to all selected scenes.
+      </div>
+
+      <Field label="Voice Offset (s)">
+        <input
+          type="number"
+          step="0.05"
+          min="0"
+          value={scene.audio_offset || 0}
+          onChange={(e) => onChange({ audio_offset: Math.max(0, parseFloat(e.target.value) || 0) })}
+          className="w-full bg-bg-base border border-white/10 rounded-md px-2 py-1.5 text-sm font-mono"
+          data-testid="inspector-audio-offset-input"
+        />
+      </Field>
+
+      <Field label="Voice Trim Start (s)">
+        <input
+          type="number"
+          step="0.05"
+          min="0"
+          value={scene.audio_trim_start || 0}
+          onChange={(e) => onChange({ audio_trim_start: Math.max(0, parseFloat(e.target.value) || 0) })}
+          className="w-full bg-bg-base border border-white/10 rounded-md px-2 py-1.5 text-sm font-mono"
+        />
+      </Field>
+
+      <Field label="Voice Trim End (s)">
+        <input
+          type="number"
+          step="0.05"
+          min="0"
+          value={scene.audio_trim_end || 0}
+          onChange={(e) => onChange({ audio_trim_end: Math.max(0, parseFloat(e.target.value) || 0) })}
+          className="w-full bg-bg-base border border-white/10 rounded-md px-2 py-1.5 text-sm font-mono"
+        />
+      </Field>
+
+      <Field label="Voice Volume">
+        <input
+          type="range"
+          min="0"
+          max="2"
+          step="0.05"
+          value={scene.audio_volume ?? 1}
+          onChange={(e) => onChange({ audio_volume: parseFloat(e.target.value) })}
+          className="w-full accent-[#FFD60A]"
+        />
+        <div className="mt-1 text-[10px] text-ink-muted font-mono">{(scene.audio_volume ?? 1).toFixed(2)}x</div>
+      </Field>
+    </>
+  );
+}
+
 function EffectsTab({ scene, isMulti, meta, toggleSelectedEffect }) {
   const isActive = (id) => (scene.effects || []).includes(id);
   return (
@@ -285,7 +387,7 @@ function EffectsTab({ scene, isMulti, meta, toggleSelectedEffect }) {
 }
 
 function CaptionsTab({ scene, meta }) {
-  const { project, setCaptionStyle, updateCaption, updateWord, removeCaption } = useEditorStore();
+  const { project, setCaptionStyle, updateCaption, updateWord, removeCaption, detachCaptionWord } = useEditorStore();
   const style = project?.caption_style || {};
   const caps = scene.captions || [];
 
@@ -307,7 +409,7 @@ function CaptionsTab({ scene, meta }) {
       {/* PRESETS */}
       <div>
         <Label>Caption Preset</Label>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {(meta.caption_presets || []).map((p) => (
             <button
               key={p.id}
@@ -343,7 +445,7 @@ function CaptionsTab({ scene, meta }) {
             </select>
           </Row>
           <Row label="Position">
-            <div className="grid grid-cols-3 gap-1">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1">
               {(meta.caption_positions || FALLBACK_META.caption_positions).map((p) => (
                 <button
                   key={p.id}
@@ -397,11 +499,35 @@ function CaptionsTab({ scene, meta }) {
             />
           </Row>
           <Row label={`Active size (${style.size_active || 96}px)`}>
+            <div className="space-y-2">
+              <input
+                type="range" min="40" max="220" step="1"
+                value={style.size_active || 96}
+                onChange={(e) => setCaptionStyle({ size_active: parseInt(e.target.value, 10) })}
+                data-testid="caption-size-active"
+                className="w-full accent-[#FFD60A]"
+              />
+              <input
+                type="number"
+                min="10"
+                max="500"
+                step="1"
+                value={style.size_active || 96}
+                onChange={(e) => setCaptionStyle({ size_active: Math.max(10, parseInt(e.target.value, 10) || 96) })}
+                className="w-full bg-bg-base border border-white/10 rounded-md px-2 py-1.5 text-xs font-mono"
+                aria-label="Custom active caption size"
+              />
+            </div>
+          </Row>
+          <Row label={`Phrase size (${style.size_phrase || 42}px)`}>
             <input
-              type="range" min="40" max="160" step="2"
-              value={style.size_active || 96}
-              onChange={(e) => setCaptionStyle({ size_active: parseInt(e.target.value, 10) })}
-              data-testid="caption-size-active"
+              type="range"
+              min="0"
+              max="120"
+              step="2"
+              value={style.size_phrase || 42}
+              onChange={(e) => setCaptionStyle({ size_phrase: parseInt(e.target.value, 10) })}
+              data-testid="caption-size-phrase"
               className="w-full accent-[#FFD60A]"
             />
           </Row>
@@ -462,6 +588,7 @@ function CaptionsTab({ scene, meta }) {
               sceneId={scene.id}
               onChangeText={(t) => updateCaption(scene.id, c.id, { text: t })}
               onChangeWord={(idx, p) => updateWord(scene.id, c.id, idx, p)}
+              onDetachWord={(idx) => detachCaptionWord(scene.id, c.id, idx)}
               onDelete={() => removeCaption(scene.id, c.id)}
             />
           ))}
@@ -474,7 +601,7 @@ function CaptionsTab({ scene, meta }) {
   );
 }
 
-function CaptionRow({ cap, onChangeText, onChangeWord, onDelete }) {
+function CaptionRow({ cap, onChangeText, onChangeWord, onDetachWord, onDelete }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="border-l-2 border-accent/40 pl-2.5">
@@ -507,7 +634,12 @@ function CaptionRow({ cap, onChangeText, onChangeWord, onDelete }) {
       {open && (cap.words || []).length > 0 && (
         <div className="mt-2 ml-12 space-y-1">
           {(cap.words || []).map((w, i) => (
-            <div key={i} className="flex items-center gap-1.5">
+            <div
+              key={i}
+              className="flex items-center gap-1.5"
+              title="Double-click to detach into an individual caption"
+              onDoubleClick={() => onDetachWord(i)}
+            >
               <span className="font-mono text-[9px] text-ink-muted w-10">{w.start.toFixed(2)}</span>
               <input
                 value={w.word}

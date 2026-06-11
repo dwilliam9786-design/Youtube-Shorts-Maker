@@ -3,23 +3,66 @@ import { create } from 'zustand';
 export const useEditorStore = create((set, get) => ({
   project: null,
   selectedSceneIds: [],     // multi-select: array of scene IDs
+  lastSelectedSceneId: null,
   isPlaying: false,
   currentTime: 0,
   setProject: (project) =>
-    set({ project, selectedSceneIds: project?.scenes?.[0] ? [project.scenes[0].id] : [] }),
+    set({ project, selectedSceneIds: project?.scenes?.[0] ? [project.scenes[0].id] : [], lastSelectedSceneId: project?.scenes?.[0]?.id || null }),
   patchProject: (patch) =>
     set((s) => ({ project: s.project ? { ...s.project, ...patch } : s.project })),
+  addMusicTrack: (url) =>
+    set((s) => {
+      if (!s.project || !url) return s;
+      const tracks = Array.from(new Set([...(s.project.music_tracks || []), url]));
+      return { project: { ...s.project, music_tracks: tracks } };
+    }),
+  addTimelineLayer: (layer) =>
+    set((s) => {
+      if (!s.project || !layer?.url) return s;
+      const next = [...(s.project.timeline_layers || []), { id: crypto.randomUUID(), start: 0, duration: 3, track: 0, volume: 1, opacity: 1, trim_start: 0, trim_end: 0, ...layer }];
+      return { project: { ...s.project, timeline_layers: next } };
+    }),
+  updateTimelineLayer: (id, patch) =>
+    set((s) => {
+      if (!s.project) return s;
+      const layers = (s.project.timeline_layers || []).map((layer) => (layer.id === id ? { ...layer, ...patch } : layer));
+      return { project: { ...s.project, timeline_layers: layers } };
+    }),
+  removeTimelineLayer: (id) =>
+    set((s) => {
+      if (!s.project) return s;
+      return { project: { ...s.project, timeline_layers: (s.project.timeline_layers || []).filter((layer) => layer.id !== id) } };
+    }),
+  removeMusicTrack: (url) =>
+    set((s) => {
+      if (!s.project) return s;
+      return { project: { ...s.project, music_tracks: (s.project.music_tracks || []).filter((track) => track !== url) } };
+    }),
   selectScene: (id, opts = {}) => {
-    const cur = get().selectedSceneIds;
+    const state = get();
+    const cur = state.selectedSceneIds;
+    const scenes = state.project?.scenes || [];
+    if (opts.shift && state.lastSelectedSceneId) {
+      const from = scenes.findIndex((s) => s.id === state.lastSelectedSceneId);
+      const to = scenes.findIndex((s) => s.id === id);
+      if (from >= 0 && to >= 0) {
+        const [start, end] = from < to ? [from, to] : [to, from];
+        set({
+          selectedSceneIds: scenes.slice(start, end + 1).map((s) => s.id),
+          lastSelectedSceneId: id,
+        });
+        return;
+      }
+    }
     if (opts.shift || opts.meta) {
-      if (cur.includes(id)) set({ selectedSceneIds: cur.filter((x) => x !== id) });
-      else set({ selectedSceneIds: [...cur, id] });
+      if (cur.includes(id)) set({ selectedSceneIds: cur.filter((x) => x !== id), lastSelectedSceneId: id });
+      else set({ selectedSceneIds: [...cur, id], lastSelectedSceneId: id });
     } else {
-      set({ selectedSceneIds: [id] });
+      set({ selectedSceneIds: [id], lastSelectedSceneId: id });
     }
   },
   setSelected: (ids) => set({ selectedSceneIds: ids }),
-  clearSelection: () => set({ selectedSceneIds: [] }),
+  clearSelection: () => set({ selectedSceneIds: [], lastSelectedSceneId: null }),
   setPlaying: (isPlaying) => set({ isPlaying }),
   setCurrentTime: (t) => set({ currentTime: t }),
   updateScene: (id, patch) =>
@@ -105,6 +148,43 @@ export const useEditorStore = create((set, get) => ({
       });
       return { project: { ...s.project, scenes } };
     }),
+  detachCaptionWord: (sceneId, capId, wordIdx) =>
+    set((s) => {
+      if (!s.project) return s;
+      const scenes = s.project.scenes.map((sc) => {
+        if (sc.id !== sceneId) return sc;
+        const captions = [...(sc.captions || [])];
+        const idx = captions.findIndex((c) => c.id === capId);
+        if (idx < 0) return sc;
+        const cap = captions[idx];
+        const words = [...(cap.words || [])];
+        const word = words[wordIdx];
+        if (!word) return sc;
+        const text = (word.word || '').trim();
+        const newCap = {
+          ...cap,
+          id: crypto.randomUUID(),
+          text,
+          start: word.start ?? cap.start,
+          end: word.end ?? cap.end,
+          words: [word],
+        };
+
+        const remainingWords = words.filter((_, i) => i !== wordIdx);
+        if (remainingWords.length === 0) {
+          captions.splice(idx, 1, newCap);
+        } else {
+          const nextText = remainingWords.map((w) => w.word).join(' ').trim();
+          const nextStart = remainingWords[0]?.start ?? cap.start;
+          const nextEnd = remainingWords[remainingWords.length - 1]?.end ?? cap.end;
+          captions[idx] = { ...cap, words: remainingWords, text: nextText, start: nextStart, end: nextEnd };
+          captions.splice(idx + 1, 0, newCap);
+        }
+        captions.sort((a, b) => (a.start || 0) - (b.start || 0));
+        return { ...sc, captions };
+      });
+      return { project: { ...s.project, scenes } };
+    }),
   removeCaption: (sceneId, capId) =>
     set((s) => {
       if (!s.project) return s;
@@ -139,6 +219,7 @@ export const useEditorStore = create((set, get) => ({
       return {
         project: { ...s.project, scenes, total_duration: total },
         selectedSceneIds: scenes[0] ? [scenes[0].id] : [],
+        lastSelectedSceneId: scenes[0] ? scenes[0].id : null,
       };
     }),
 }));

@@ -38,7 +38,7 @@ export default function Editor() {
       }
     })();
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, nav, setCurrentTime, setProject]);
 
   const onSave = useCallback(async () => {
     if (!project) return;
@@ -48,6 +48,10 @@ export default function Editor() {
         title: project.title,
         scenes: project.scenes,
         music_url: project.music_url,
+        music_tracks: project.music_tracks,
+        timeline_layers: project.timeline_layers,
+        music_timeline: project.music_timeline,
+        caption_style: project.caption_style,
         total_duration: (project.scenes || []).reduce((a, s) => a + (s.duration || 0), 0),
       };
       await apiClient.updateProject(project.id, payload);

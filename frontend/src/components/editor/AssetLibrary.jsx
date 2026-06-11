@@ -12,7 +12,7 @@ export default function AssetLibrary() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef(null);
-  const { selectedSceneIds, updateScene, patchProject } = useEditorStore();
+  const { selectedSceneIds, updateScene, patchProject, addMusicTrack } = useEditorStore();
   const targetId = selectedSceneIds[0];
 
   const search = async () => {
@@ -42,6 +42,7 @@ export default function AssetLibrary() {
   };
 
   const applyMusic = (item) => {
+    addMusicTrack(item.preview);
     patchProject({ music_url: item.preview });
     toast.success('Music added');
   };
@@ -83,6 +84,7 @@ export default function AssetLibrary() {
       updateScene(targetId, { image_url: u.url, video_url: null });
       toast.success('Image applied');
     } else if (u.media_type === 'audio') {
+      addMusicTrack(u.url);
       patchProject({ music_url: u.url });
       toast.success('Music set');
     }
@@ -150,13 +152,7 @@ export default function AssetLibrary() {
               <div key={it.id} className="p-3 border border-white/8 rounded-md hover:border-accent/40 transition-colors">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-sm font-medium">{it.title}</div>
-                  <button
-                    onClick={() => applyMusic(it)}
-                    className="text-[11px] px-2 py-1 bg-accent text-black rounded font-medium hover:bg-accent-hover"
-                    data-testid={`library-music-add-${it.id}`}
-                  >
-                    + Add
-                  </button>
+                  <button onClick={() => applyMusic(it)} className="text-[11px] px-2 py-1 bg-accent text-black rounded font-medium hover:bg-accent-hover" data-testid={`library-music-add-${it.id}`}>+ Add</button>
                 </div>
                 <audio src={it.preview} controls className="w-full h-8" />
               </div>

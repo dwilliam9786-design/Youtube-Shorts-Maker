@@ -43,7 +43,23 @@ class Scene(BaseModel):
     animation: str = "ken_burns_in"
     effects: List[str] = []
     speaker: str = "primary"
+    crop_x: float = 0.0
+    crop_y: float = 0.0
+    crop_zoom: float = 1.0
     captions: List[Caption] = []
+
+
+class TimelineLayer(BaseModel):
+    id: str = Field(default_factory=_uid)
+    type: str = "audio"  # audio | image | video
+    url: str
+    start: float = 0.0
+    duration: float = 3.0
+    track: int = 0
+    volume: float = 1.0
+    opacity: float = 1.0
+    trim_start: float = 0.0
+    trim_end: float = 0.0
 
 
 class CaptionStyle(BaseModel):
@@ -72,6 +88,9 @@ class Project(BaseModel):
     caption_style: CaptionStyle = Field(default_factory=CaptionStyle)
     scenes: List[Scene] = []
     music_url: Optional[str] = None
+    music_tracks: List[str] = []
+    timeline_layers: List[TimelineLayer] = []
+    music_timeline: dict = Field(default_factory=lambda: {"start": 0, "duration": 0, "trim_start": 0, "trim_end": 0})
     total_duration: float = 0.0
     thumbnail_url: Optional[str] = None
     status: Literal["draft", "generating", "ready", "rendering", "rendered", "failed"] = "draft"

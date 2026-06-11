@@ -81,6 +81,8 @@ FORMATS = {
     "gif":  ("gif",  None,       None,       []),  # no audio
 }
 
+REQUIRED_BINARIES = ("ffmpeg", "ffprobe")
+
 # Speaker color palette (for multi-speaker support)
 SPEAKER_COLORS = {
     "primary":  "#FFD60A",   # cyber yellow
@@ -95,12 +97,72 @@ def _ffmpeg_escape(s: str) -> str:
     return s.replace("\\", "\\\\").replace(":", r"\:").replace("'", r"\'").replace(",", r"\,")
 
 
+def render_dependencies() -> Dict[str, Any]:
+    binaries = {name: shutil.which(name) for name in REQUIRED_BINARIES}
+    return {
+        "available": all(bool(path) for path in binaries.values()),
+        "binaries": binaries,
+    }
+
+
 async def _download(url: str, dest: Path) -> Path:
     async with httpx.AsyncClient(timeout=60, follow_redirects=True) as c:
         r = await c.get(url)
         r.raise_for_status()
         dest.write_bytes(r.content)
     return dest
+
+
+def _music_source_paths(project: Dict[str, Any], work: Path) -> List[Path]:
+    tracks = []
+    primary = project.get("music_url")
+    extra = project.get("music_tracks") or []
+    for url in [primary, *extra]:
+        if not url:
+            continue
+        resolved = _resolve_storage_path(url)
+        if resolved and resolved.exists():
+            tracks.append(resolved)
+    return tracks
+
+
+async def _layer_source_path(layer: Dict[str, Any], work: Path, idx: int) -> Optional[Path]:
+    url = layer.get("url")
+    if not url:
+        return None
+    if str(url).startswith(("http://", "https://")):
+        ext = Path(str(url).split("?")[0]).suffix or ".bin"
+        dest = work / f"layer_{idx}{ext}"
+        try:
+            return await _download(str(url), dest)
+        except Exception:
+            return None
+    resolved = _resolve_storage_path(str(url))
+    return resolved if resolved and resolved.exists() else None
+
+
+def _resolve_storage_path(url: Optional[str]) -> Optional[Path]:
+    if not url:
+        return None
+    raw = str(url).strip()
+    if not raw:
+        return None
+    if raw.startswith("http://") or raw.startswith("https://"):
+        return None
+    normalized = raw.replace("\\", "/")
+    if normalized.startswith("/"):
+        normalized = normalized[1:]
+    if normalized.startswith("api/storage/"):
+        normalized = normalized[len("api/storage/") :]
+    if normalized.startswith("storage/"):
+        normalized = normalized[len("storage/") :]
+    if normalized.startswith("app/storage/"):
+        normalized = normalized[len("app/storage/") :]
+    if normalized.startswith("voiceover/") or normalized.startswith("renders/") or normalized.startswith("uploads/"):
+        return STORAGE_DIR / normalized
+    if "/" in normalized:
+        return Path(normalized)
+    return STORAGE_DIR / "voiceover" / normalized
 
 
 async def _run(cmd: List[str]) -> Tuple[int, str]:
@@ -112,6 +174,14 @@ async def _run(cmd: List[str]) -> Tuple[int, str]:
     )
     stdout, stderr = await proc.communicate()
     return proc.returncode, (stderr.decode("utf-8", errors="ignore") + stdout.decode("utf-8", errors="ignore"))
+
+
+async def _has_audio_stream(path: Path) -> bool:
+    code, output = await _run([
+        "ffprobe", "-v", "error", "-select_streams", "a:0",
+        "-show_entries", "stream=codec_type", "-of", "default=nw=1:nk=1", str(path),
+    ])
+    return code == 0 and "audio" in output
 
 
 async def render_project(
@@ -144,7 +214,7 @@ async def render_project(
     for i, sc in enumerate(scenes):
         img_url = sc.get("image_url") or ""
         upload_url = sc.get("video_url")  # uploaded user clip (mp4) — overrides image
-        voice_path = sc.get("voiceover_url")
+        voice_path = _resolve_storage_path(sc.get("voiceover_url"))
         duration = float(sc.get("duration") or 3.0)
 
         media_path = work / f"scene_{i}"
@@ -183,6 +253,7 @@ async def render_project(
         captions = sc.get("captions", [])
 
         base_vf = f"scale={W*2}:{H*2}:force_original_aspect_ratio=increase,crop={W*2}:{H*2}"
+        crop_vf = _scene_crop_filter(sc, W, H)
         anim_vf = _ken_burns_filter(animation, duration, W, H, fps)
         fx_vf = _effects_filter(effects, duration, fps)
 
@@ -196,7 +267,10 @@ async def render_project(
         else:
             caption_vf = None
 
-        chain_parts = [base_vf, anim_vf]
+        chain_parts = [base_vf]
+        if crop_vf:
+            chain_parts.append(crop_vf)
+        chain_parts.append(anim_vf)
         if fx_vf:
             chain_parts.append(fx_vf)
         chain_parts.append("format=yuv420p")
@@ -248,31 +322,129 @@ async def render_project(
         raise RuntimeError(f"Concat failed: {log[-1500:]}")
     await report(82, f"Concatenated {total} scenes")
 
-    # Add background music (mix under voiceover) if present
-    music_url = project.get("music_url")
-    if music_url:
-        await report(86, "Mixing background music")
-        music_path = work / "music_in.mp3"
-        try:
-            if music_url.startswith("http"):
-                await _download(music_url, music_path)
+    visual_layers = [
+        layer for layer in (project.get("timeline_layers") or [])
+        if layer.get("type") in {"image", "video"} and layer.get("url")
+    ]
+    if visual_layers:
+        await report(84, "Compositing timeline layers")
+        layered = work / "layered.mp4"
+        ffmpeg_cmd = ["ffmpeg", "-y", "-i", str(concat_mp4)]
+        filter_parts = ["[0:v]setpts=PTS-STARTPTS[basev]"]
+        current_label = "basev"
+        input_index = 1
+        for idx, layer in enumerate(visual_layers):
+            src = await _layer_source_path(layer, work, idx)
+            if not src:
+                continue
+            start = max(0.0, float(layer.get("start") or 0))
+            duration = max(0.1, float(layer.get("duration") or 3))
+            opacity = max(0.0, min(1.0, float(layer.get("opacity") if layer.get("opacity") is not None else 1.0)))
+            if layer.get("type") == "image":
+                ffmpeg_cmd += ["-loop", "1", "-t", f"{duration:.3f}", "-i", str(src)]
+                filter_parts.append(
+                    f"[{input_index}:v]scale={W}:{H}:force_original_aspect_ratio=increase,"
+                    f"crop={W}:{H},format=rgba,colorchannelmixer=aa={opacity}[ov{idx}]"
+                )
             else:
-                local = STORAGE_DIR / music_url.lstrip("/").replace("api/storage/", "")
-                if local.exists():
-                    shutil.copy(local, music_path)
-        except Exception:
-            music_path = None
-        if music_path and music_path.exists():
-            mixed = work / "mixed.mp4"
-            code, log = await _run([
-                "ffmpeg", "-y", "-i", str(concat_mp4), "-stream_loop", "-1", "-i", str(music_path),
-                "-filter_complex", "[1:a]volume=0.18[m];[0:a][m]amix=inputs=2:duration=first:dropout_transition=0[a]",
-                "-map", "0:v", "-map", "[a]",
-                "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
-                "-shortest", str(mixed),
-            ])
+                ffmpeg_cmd += ["-stream_loop", "-1", "-t", f"{duration:.3f}", "-i", str(src)]
+                trim_start = max(0.0, float(layer.get("trim_start") or 0))
+                filter_parts.append(
+                    f"[{input_index}:v]trim=start={trim_start}:duration={duration},setpts=PTS-STARTPTS+{start}/TB,"
+                    f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
+                    f"format=rgba,colorchannelmixer=aa={opacity}[ov{idx}]"
+                )
+            next_label = f"v{idx}"
+            filter_parts.append(
+                f"[{current_label}][ov{idx}]overlay=0:0:eof_action=pass:"
+                f"enable='between(t,{start:.3f},{start + duration:.3f})'[{next_label}]"
+            )
+            current_label = next_label
+            input_index += 1
+        if current_label != "basev":
+            ffmpeg_cmd += [
+                "-filter_complex", ";".join(filter_parts),
+                "-map", f"[{current_label}]",
+                "-map", "0:a?",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
+                "-c:a", "copy",
+                str(layered),
+            ]
+            code, log = await _run(ffmpeg_cmd)
             if code == 0:
-                concat_mp4 = mixed
+                concat_mp4 = layered
+            else:
+                raise RuntimeError(f"Timeline layer compositing failed: {log[-1500:]}")
+
+    # Add timeline audio and background music under scene voiceover when present
+    music_tracks = _music_source_paths(project, work)
+    audio_layers = [
+        layer for layer in (project.get("timeline_layers") or [])
+        if layer.get("type") == "audio" and layer.get("url")
+    ]
+    if music_tracks or audio_layers:
+        await report(88, "Mixing timeline audio")
+        mixed = work / "mixed.mp4"
+        music_timeline = project.get("music_timeline") or {}
+        start = max(0.0, float(music_timeline.get("start") or 0))
+        trim_start = max(0.0, float(music_timeline.get("trim_start") or 0))
+        trim_end = max(0.0, float(music_timeline.get("trim_end") or 0))
+        duration = float(music_timeline.get("duration") or 0)
+        audio_duration = max(0.5, duration - trim_start - trim_end) if duration else None
+
+        prepared_inputs = []
+        for idx, src in enumerate(music_tracks):
+            prepared = work / f"music_{idx}.mp3"
+            shutil.copy(src, prepared)
+            prepared_inputs.append({
+                "path": prepared,
+                "start": start,
+                "trim_start": trim_start,
+                "duration": audio_duration,
+                "volume": 0.18 / max(1, len(music_tracks)),
+            })
+        for idx, layer in enumerate(audio_layers):
+            src = await _layer_source_path(layer, work, idx + 100)
+            if not src:
+                continue
+            prepared_inputs.append({
+                "path": src,
+                "start": max(0.0, float(layer.get("start") or 0)),
+                "trim_start": max(0.0, float(layer.get("trim_start") or 0)),
+                "duration": max(0.25, float(layer.get("duration") or 3)),
+                "volume": max(0.0, float(layer.get("volume") if layer.get("volume") is not None else 1.0)),
+            })
+
+        ffmpeg_cmd = ["ffmpeg", "-y", "-i", str(concat_mp4)]
+        filter_parts = []
+        mix_inputs = []
+        next_audio_input = 1
+        if await _has_audio_stream(concat_mp4):
+            mix_inputs.append("[0:a]")
+        else:
+            render_duration = max(0.5, sum(float(sc.get("duration") or 0) for sc in scenes))
+            ffmpeg_cmd += ["-f", "lavfi", "-t", f"{render_duration:.3f}", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
+            mix_inputs.append("[1:a]")
+            next_audio_input = 2
+        for idx, item in enumerate(prepared_inputs):
+            ffmpeg_cmd += ["-stream_loop", "-1", "-i", str(item["path"])]
+            label = f"m{idx}"
+            delay_ms = int(float(item["start"]) * 1000)
+            duration_part = f":duration={float(item['duration']):.3f}" if item.get("duration") else ""
+            filter_parts.append(
+                f"[{next_audio_input + idx}:a]atrim=start={float(item['trim_start']):.3f}{duration_part},"
+                f"asetpts=PTS-STARTPTS,volume={float(item['volume']):.3f},"
+                f"adelay={delay_ms}|{delay_ms}[{label}]"
+            )
+            mix_inputs.append(f"[{label}]")
+        amix_inputs = "".join(mix_inputs)
+        filter_parts.append(f"{amix_inputs}amix=inputs={len(mix_inputs)}:duration=first:dropout_transition=0[a]")
+        ffmpeg_cmd += ["-filter_complex", ";".join(filter_parts), "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", str(mixed)]
+        code, log = await _run(ffmpeg_cmd)
+        if code == 0:
+            concat_mp4 = mixed
+        else:
+            raise RuntimeError(f"Timeline audio mix failed: {log[-1500:]}")
 
     # Final encode to requested format
     final_name = f"{job_id}.{ext}"
@@ -348,6 +520,23 @@ def _effects_filter(effects: List[str], duration: float, fps: int) -> Optional[s
         elif fx == "speed_ramp":
             parts.append(f"setpts='if(lt(T\\,{duration/2})\\,PTS*0.7\\,PTS*1.3)'")
     return ",".join(parts) if parts else None
+
+
+def _scene_crop_filter(scene: Dict[str, Any], w: int, h: int) -> Optional[str]:
+    zoom = max(1.0, float(scene.get("crop_zoom") or 1.0))
+    x_pct = float(scene.get("crop_x") or 0.0)
+    y_pct = float(scene.get("crop_y") or 0.0)
+    if zoom == 1.0 and x_pct == 0.0 and y_pct == 0.0:
+        return None
+    crop_w = max(2, int(round(w / zoom)))
+    crop_h = max(2, int(round(h / zoom)))
+    max_x = max(0, w - crop_w)
+    max_y = max(0, h - crop_h)
+    x = int(round((max_x / 2) + (x_pct / 100.0) * (max_x / 2)))
+    y = int(round((max_y / 2) + (y_pct / 100.0) * (max_y / 2)))
+    x = max(0, min(max_x, x))
+    y = max(0, min(max_y, y))
+    return f"crop={crop_w}:{crop_h}:{x}:{y},scale={w}:{h}"
 
 
 def _build_caption_filter(captions: List[Dict[str, Any]], w: int, h: int) -> str:

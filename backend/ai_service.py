@@ -7,13 +7,13 @@ import uuid
 from pathlib import Path
 from typing import List, Dict, Any
 
+import httpx
 from dotenv import load_dotenv
-from emergentintegrations.llm.chat import LlmChat, UserMessage
-from emergentintegrations.llm.openai import OpenAITextToSpeech, OpenAISpeechToText
 
 load_dotenv()
 
-_KEY = os.environ.get("EMERGENT_LLM_KEY")
+_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
+OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
 STORAGE_DIR = Path(os.environ.get("STORAGE_DIR", "/app/storage"))
 VOICE_DIR = STORAGE_DIR / "voiceover"
 VOICE_DIR.mkdir(parents=True, exist_ok=True)
@@ -36,14 +36,33 @@ NO commentary, NO markdown fences, JUST JSON.
 
 async def split_into_scenes(script: str) -> List[Dict[str, Any]]:
     """Use GPT-5.2 to split a script into a list of scene dicts."""
-    chat = LlmChat(
-        api_key=_KEY,
-        session_id=f"scene-split-{uuid.uuid4().hex[:8]}",
-        system_message=SCENE_SYSTEM_PROMPT,
-    ).with_model("openai", "gpt-5.2")
+    if not _KEY:
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", script.strip()) if s.strip()]
+        return [
+            {
+                "script": s,
+                "keywords": s.split()[:3],
+                "animation": "ken_burns_in",
+                "transition_in": "fade",
+                "emphasis_words": [],
+            }
+            for s in sentences[:6]
+        ]
 
-    msg = UserMessage(text=f"Script:\n\"\"\"{script.strip()}\"\"\"")
-    raw = await chat.send_message(msg)
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "system", "content": SCENE_SYSTEM_PROMPT},
+            {"role": "user", "content": f'Script:\n"""{script.strip()}"""'},
+        ],
+        "temperature": 0.4,
+    }
+    headers = {"Authorization": f"Bearer {_KEY}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=60) as client:
+        r = await client.post(f"{OPENAI_BASE_URL}/chat/completions", headers=headers, json=payload)
+        r.raise_for_status()
+        data = r.json()
+        raw = data["choices"][0]["message"]["content"]
 
     # Strip code fences if any
     cleaned = re.sub(r"^```(?:json)?|```$", "", raw.strip(), flags=re.MULTILINE).strip()
@@ -68,8 +87,14 @@ async def split_into_scenes(script: str) -> List[Dict[str, Any]]:
 
 async def synthesize_voice(text: str, voice: str = "nova", model: str = "tts-1") -> str:
     """Generate TTS audio, save MP3, return absolute file path."""
-    tts = OpenAITextToSpeech(api_key=_KEY)
-    audio_bytes = await tts.generate_speech(text=text, model=model, voice=voice)
+    if not _KEY:
+        raise RuntimeError("OpenAI TTS backend is unavailable: missing OPENAI_API_KEY")
+    payload = {"model": model, "voice": voice, "input": text, "format": "mp3"}
+    headers = {"Authorization": f"Bearer {_KEY}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=120) as client:
+        r = await client.post(f"{OPENAI_BASE_URL}/audio/speech", headers=headers, json=payload)
+        r.raise_for_status()
+        audio_bytes = r.content
     file_id = uuid.uuid4().hex
     out_path = VOICE_DIR / f"{file_id}.mp3"
     out_path.write_bytes(audio_bytes)
@@ -78,14 +103,20 @@ async def synthesize_voice(text: str, voice: str = "nova", model: str = "tts-1")
 
 async def transcribe_words(audio_path: str) -> Dict[str, Any]:
     """Whisper: get word-level timestamps. Returns {'text', 'words':[{word,start,end}], 'duration'}"""
-    stt = OpenAISpeechToText(api_key=_KEY)
+    if not _KEY:
+        raise RuntimeError("OpenAI STT backend is unavailable: missing OPENAI_API_KEY")
     with open(audio_path, "rb") as f:
-        resp = await stt.transcribe(
-            file=f,
-            model="whisper-1",
-            response_format="verbose_json",
-            timestamp_granularities=["word"],
-        )
+        files = {"file": (Path(audio_path).name, f, "audio/mpeg")}
+        data = {
+            "model": "whisper-1",
+            "response_format": "verbose_json",
+            "timestamp_granularities[]": "word",
+        }
+        headers = {"Authorization": f"Bearer {_KEY}"}
+        async with httpx.AsyncClient(timeout=180) as client:
+            r = await client.post(f"{OPENAI_BASE_URL}/audio/transcriptions", headers=headers, data=data, files=files)
+            r.raise_for_status()
+            resp = r.json()
 
     words = []
     duration = 0.0

@@ -414,6 +414,22 @@ function CaptionsTab({ scene, meta }) {
               className="w-full accent-[#FFD60A]"
             />
           </Row>
+          <Row label={`X Offset (${Math.round(style.offset_x || 0)}px)`}>
+            <input
+              type="range" min="-400" max="400" step="1"
+              value={style.offset_x || 0}
+              onChange={(e) => setCaptionStyle({ offset_x: parseInt(e.target.value, 10) })}
+              className="w-full accent-[#FFD60A]"
+            />
+          </Row>
+          <Row label={`Y Offset (${Math.round(style.offset_y || 0)}px)`}>
+            <input
+              type="range" min="-400" max="400" step="1"
+              value={style.offset_y || 0}
+              onChange={(e) => setCaptionStyle({ offset_y: parseInt(e.target.value, 10) })}
+              className="w-full accent-[#FFD60A]"
+            />
+          </Row>
           <div className="flex items-center justify-between">
             <span className="text-[11px] text-ink-secondary">Uppercase</span>
             <Toggle

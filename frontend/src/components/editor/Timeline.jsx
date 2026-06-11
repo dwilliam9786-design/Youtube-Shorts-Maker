@@ -6,7 +6,7 @@ const PX_PER_SEC_DEFAULT = 80;
 
 export default function Timeline() {
   const {
-    project, currentTime, setCurrentTime, selectedSceneIds, selectScene, reorderScenes,
+    project, currentTime, setCurrentTime, selectedSceneIds, selectScene, reorderScenes, updateScene, trimScene, setMusicTimeline,
   } = useEditorStore();
   const scenes = project?.scenes || [];
   const total = scenes.reduce((acc, s) => acc + (s.duration || 0), 0);
@@ -119,6 +119,8 @@ export default function Timeline() {
                   }}
                   onDrop={onDropClip(i)}
                   dragOver={dragOver === i}
+                  onTrimLeft={(secs) => trimScene(sc.id, secs, 0)}
+                  onTrimRight={(secs) => trimScene(sc.id, 0, secs)}
                 />
               ))}
             </Track>
@@ -137,13 +139,22 @@ export default function Timeline() {
                   width={Math.max(20, (sc.duration || 0) * pxPerSec)}
                   label="VO"
                   color="#34D399"
+                  draggable
+                  onMove={(dx) => updateScene(sc.id, { audio_offset: Math.max(0, (sc.audio_offset || 0) + dx / pxPerSec) })}
                 />
               ))}
             </Track>
 
             <Track height={64}>
               {project?.music_url && (
-                <AudioBar left={0} width={total * pxPerSec} label="Music" color="#60A5FA" />
+                <AudioBar
+                  left={(project.music_timeline?.start || 0) * pxPerSec}
+                  width={Math.max(20, (project.music_timeline?.duration || total) * pxPerSec)}
+                  label="Music"
+                  color="#60A5FA"
+                  draggable
+                  onMove={(dx) => setMusicTimeline({ start: Math.max(0, (project.music_timeline?.start || 0) + dx / pxPerSec) })}
+                />
               )}
             </Track>
 
@@ -167,7 +178,8 @@ function Track({ height, children }) {
   return <div className="relative border-b border-white/5" style={{ height }}>{children}</div>;
 }
 
-function Clip({ scene, idx, left, width, selected, onSelect, onDragStart, onDragOver, onDrop, dragOver }) {
+function Clip({ scene, idx, left, width, selected, onSelect, onDragStart, onDragOver, onDrop, dragOver, onTrimLeft, onTrimRight }) {
+  const sx = React.useRef(null);
   return (
     <div
       data-clip
@@ -196,6 +208,36 @@ function Clip({ scene, idx, left, width, selected, onSelect, onDragStart, onDrag
       {(scene.effects || []).length > 0 && (
         <div className="absolute bottom-1 right-1 text-[9px] font-mono text-black bg-accent px-1 rounded">FX {scene.effects.length}</div>
       )}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/20"
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          sx.current = e.clientX;
+          const mm = (ev) => {
+            const dx = ev.clientX - sx.current;
+            sx.current = ev.clientX;
+            onTrimLeft(dx / 80);
+          };
+          const mu = () => { window.removeEventListener('mousemove', mm); window.removeEventListener('mouseup', mu); };
+          window.addEventListener('mousemove', mm);
+          window.addEventListener('mouseup', mu);
+        }}
+      />
+      <div
+        className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/20"
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          sx.current = e.clientX;
+          const mm = (ev) => {
+            const dx = ev.clientX - sx.current;
+            sx.current = ev.clientX;
+            onTrimRight(-dx / 80);
+          };
+          const mu = () => { window.removeEventListener('mousemove', mm); window.removeEventListener('mouseup', mu); };
+          window.addEventListener('mousemove', mm);
+          window.addEventListener('mouseup', mu);
+        }}
+      />
     </div>
   );
 }
@@ -218,11 +260,23 @@ function CaptionTrack({ scene, left, pxPerSec }) {
   );
 }
 
-function AudioBar({ left, width, label, color }) {
+function AudioBar({ left, width, label, color, draggable, onMove }) {
+  const sx = React.useRef(null);
   return (
     <div
-      className="absolute top-2 bottom-2 rounded-md border overflow-hidden flex items-center px-2 text-[10px] font-mono text-white pointer-events-none"
+      className={`absolute top-2 bottom-2 rounded-md border overflow-hidden flex items-center px-2 text-[10px] font-mono text-white ${draggable ? 'cursor-move' : 'pointer-events-none'}`}
       style={{ left, width, background: `${color}22`, borderColor: `${color}66` }}
+      onMouseDown={draggable ? (e) => {
+        sx.current = e.clientX;
+        const mm = (ev) => {
+          const dx = ev.clientX - sx.current;
+          sx.current = ev.clientX;
+          onMove?.(dx);
+        };
+        const mu = () => { window.removeEventListener('mousemove', mm); window.removeEventListener('mouseup', mu); };
+        window.addEventListener('mousemove', mm);
+        window.addEventListener('mouseup', mu);
+      } : undefined}
     >
       <svg className="absolute inset-y-0 left-0 right-0 w-full h-full opacity-50">
         <path

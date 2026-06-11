@@ -29,6 +29,26 @@ export const useEditorStore = create((set, get) => ({
       const total = scenes.reduce((a, x) => a + (x.duration || 0), 0);
       return { project: { ...s.project, scenes, total_duration: total } };
     }),
+  trimScene: (id, leftDelta = 0, rightDelta = 0) =>
+    set((s) => {
+      if (!s.project) return s;
+      const scenes = s.project.scenes.map((sc) => {
+        if (sc.id !== id) return sc;
+        const dur = Math.max(0.5, sc.duration || 0);
+        const trimStart = Math.max(0, (sc.trim_start || 0) + leftDelta);
+        const trimEnd = Math.max(0, (sc.trim_end || 0) + rightDelta);
+        const nextDuration = Math.max(0.5, dur - leftDelta - rightDelta);
+        return { ...sc, trim_start: trimStart, trim_end: trimEnd, duration: nextDuration };
+      });
+      const total = scenes.reduce((a, x) => a + (x.duration || 0), 0);
+      return { project: { ...s.project, scenes, total_duration: total } };
+    }),
+  setMusicTimeline: (patch) =>
+    set((s) => {
+      if (!s.project) return s;
+      const cur = s.project.music_timeline || { start: 0, duration: s.project.total_duration || 0, trim_start: 0, trim_end: 0 };
+      return { project: { ...s.project, music_timeline: { ...cur, ...patch } } };
+    }),
   updateSelectedScenes: (patch) =>
     set((s) => {
       if (!s.project) return s;

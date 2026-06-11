@@ -245,7 +245,7 @@ function SceneFrame({ scene, sceneLocal }) {
 }
 
 function CaptionOverlay({ scene, sceneLocal }) {
-  const project = useEditorStore.getState().project;
+  const { project, setCaptionStyle } = useEditorStore.getState();
   const style = project?.caption_style || {};
   const cap = (scene.captions || []).find(
     (c) => sceneLocal >= c.start - 0.02 && sceneLocal <= c.end + 0.02
@@ -260,6 +260,8 @@ function CaptionOverlay({ scene, sceneLocal }) {
   const upper = style.uppercase !== false;
   const showPhrase = style.show_phrase !== false && sizePhrase > 0;
   const position = style.position || 'bottom';
+  const offsetX = style.offset_x || 0;
+  const offsetY = style.offset_y || 0;
   const bg = style.background || 'none';
   const fontFamily = ({
     bold_sans: 'Satoshi, system-ui, sans-serif',
@@ -285,7 +287,25 @@ function CaptionOverlay({ scene, sceneLocal }) {
   const animEnabled = (style.animation || 'pop') !== 'none';
 
   return (
-    <div className={`absolute inset-x-4 flex flex-col items-center pointer-events-none gap-2 ${positionClass}`}>
+    <div
+      className={`absolute inset-x-4 flex flex-col items-center gap-2 ${positionClass}`}
+      style={{ transform: `translate(${offsetX}px, ${offsetY}px)` }}
+      onMouseDown={(e) => {
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const baseX = style.offset_x || 0;
+        const baseY = style.offset_y || 0;
+        const mm = (ev) => {
+          setCaptionStyle({ offset_x: baseX + (ev.clientX - startX), offset_y: baseY + (ev.clientY - startY) });
+        };
+        const mu = () => {
+          window.removeEventListener('mousemove', mm);
+          window.removeEventListener('mouseup', mu);
+        };
+        window.addEventListener('mousemove', mm);
+        window.addEventListener('mouseup', mu);
+      }}
+    >
       <div
         className="font-black tracking-tighter text-center px-1"
         style={{
